@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>충남대 B팀 | 대전 중소기업 HWP·LLM 반복 행정업무 자동화 시연</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Browser-side pure JS HWP 5.0 (CFB+zlib) & HWPX (ZIP+XML) libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cfb@1.2.2/cfb.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Hero -->
+    <header class="hero">
+      <div class="hero-left">
+        <div class="badge-row">
+          <span class="badge accent">2026 DSC 공유대학 AI 실전 프로젝트 챌린지</span>
+          <span class="badge">과제 4 · 중소기업 반복 행정업무 개선</span>
+          <span class="badge">충남대 B팀 (신수하 · 우디)</span>
+        </div>
+        <h1>국방·공공 HWP/HWPX 문서 파싱 × BAZE LLM<br />대전 B2B 중소기업 4종 행정서식 원클릭 자동화</h1>
+        <p>
+          대전 대덕산단·대덕특구 배후 정밀제조·방산·연구기자재 중소기업(<strong>(주)대덕정밀기계</strong> 페르소나)이
+          <strong>방위사업청 실제 공고(.hwp / .hwpx)</strong>를 1회 파싱해
+          <strong>견적서 → 발주·작업지시서 → 거래명세·납품검수서 → 품의·지출결의서</strong>를 한 번에 생성·교차검증하는 실전 시연 플랫폼입니다.
+        </p>
+        <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px;">
+          <button id="openQrBtn" class="btn btn-accent">📱 발표용 QR 코드 크게 보기</button>
+          <a href="https://github.com/woody-korean/dsc-hwp-ai-pipeline" target="_blank" rel="noopener" class="btn">💻 GitHub 저장소 &amp; 파이프라인 코드</a>
+        </div>
+      </div>
+      <div class="hero-qr-card">
+        <img src="qr.svg" alt="라이브 데모 접속 QR 코드" />
+        <span>모바일 실시간 시연 QR</span>
+      </div>
+    </header>
+
+    <!-- Mode Switch -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="corpus">
+        🏛️ 1. 실제 방위사업청 HWP/HWPX 파싱 &amp; BAZE LLM 파이프라인 (4건)
+      </button>
+      <button class="mode-tab" data-mode="upload">
+        📤 2. 내 HWP / HWPX 파일 직접 업로드 · 브라우저 실시간 파싱
+      </button>
+    </div>
+
+    <!-- Mode 1: Precomputed Real DAPA Cases -->
+    <section id="corpusSection">
+      <div id="corpusGrid" class="corpus-grid"></div>
+    </section>
+
+    <!-- Mode 2: Live Browser Upload -->
+    <section id="uploadSection" class="hidden">
+      <div class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">U</span> 내 PC/모바일 HWP·HWPX 실시간 파싱</div>
+          <span class="pill">서버 업로드 없이 브라우저 내 100% 직접 해석</span>
+        </div>
+        <div id="dropZone" class="upload-zone">
+          <div style="font-size: 32px; margin-bottom: 6px;">📄</div>
+          <div style="font-weight: 800; font-size: 15px; margin-bottom: 4px;">
+            여기에 <code>.hwp</code> (OLE2 바이너리) 또는 <code>.hwpx</code> (OWPML XML) 파일을 끌어다 놓거나 클릭하세요
+          </div>
+          <div style="font-size: 12.5px; color: var(--muted);">
+            위 탭에서 원본 방위사업청 HWP/HWPX 파일을 내려받은 뒤 그대로 올려서 테스트할 수도 있습니다.
+          </div>
+          <input id="fileInput" type="file" accept=".hwp,.hwpx" class="hidden" />
+        </div>
+        <div class="api-box">
+          <strong>선택 사항 — 실시간 BAZE LLM API 연동 (미입력 시 내장 스마트 규칙 파서로 즉시 4종 서식 바인딩):</strong>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; align-items: center;">
+            <input id="liveApiKey" type="password" placeholder="선택: BAZE API Key (예: baze_... — 브라우저 세션에만 유지)" />
+            <span style="color: var(--muted); font-size: 12px;">※ 보안상 GitHub 코드에는 키를 저장하지 않습니다.</span>
+          </div>
+        </div>
+        <div id="uploadStatus" style="margin-top: 10px; font-size: 13px; font-weight: 700;"></div>
+      </div>
+    </section>
+
+    <!-- Pipeline Results Container -->
+    <main id="pipelineWorkspace">
+      <!-- Step 1: HWP/HWPX Raw Parser -->
+      <section class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">1</span> 한국형 HWP / HWPX 원천 바이너리·XML 파싱</div>
+          <div id="step1Actions" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+        <div id="parseKvGrid" class="kv-grid"></div>
+        <details open>
+          <summary style="cursor: pointer; font-weight: 700; font-size: 13px; margin-bottom: 8px;">
+            파싱 추출 원문 및 표(Markdown Table) 확인
+          </summary>
+          <div id="rawExtractedBox" class="raw-text-box"></div>
+        </details>
+      </section>
+
+      <!-- Step 2: BAZE LLM Extraction & Alerts -->
+      <section class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">2</span> BAZE LLM (gpt-6.1-terra) 핵심 정보 추출 &amp; 행정 리스크 진단</div>
+          <span id="llmMetaBadge" class="pill hwpx">BAZE API Gateway 검증 완료</span>
+        </div>
+        <div class="grid-2">
+          <div>
+            <div id="summaryKvGrid" class="kv-grid"></div>
+            <div style="font-size: 13px; background: var(--surface-alt); border: 1px solid var(--border); padding: 12px; border-radius: 10px;">
+              <strong>참가자격 · 핵심 요구규격 요약:</strong>
+              <p id="eligibilityText" style="margin: 4px 0 8px;"></p>
+              <strong>주요 일정 및 필수 서류:</strong>
+              <ul id="scheduleAttachList" style="margin: 4px 0 0; padding-left: 18px;"></ul>
+            </div>
+          </div>
+          <div>
+            <div style="font-weight: 800; font-size: 13.5px; margin-bottom: 8px; color: var(--fail);">
+              ⚠️ AI 행정 누락 방지 체크포인트 (Human-in-the-Loop 알림)
+            </div>
+            <div id="riskAlertsBox"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: 4-Doc Chain & 3-Way Verification -->
+      <section class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">3</span> 단일 원천(Single Source of Truth) 기반 4종 행정서식 자동생성 &amp; 3-Way 교차검증</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button id="toggleMismatchBtn" class="btn btn-sm">🧪 수량/단가 불일치 오류 탐지 시연</button>
+            <button id="printBtn" class="btn btn-primary btn-sm">🖨️ 현재 서식 A4 인쇄 / PDF</button>
+          </div>
+        </div>
+
+        <div id="crossCheckGrid" class="crosscheck-grid"></div>
+
+        <div class="sot-bar">
+          <strong>⚡ 실시간 Single Source 연동 테스트 (1번 품목 기준):</strong>
+          <label>수량: <input id="liveQtyInput" type="number" min="1" step="1" /></label>
+          <label>단가(원): <input id="livePriceInput" type="number" min="0" step="100000" /></label>
+          <span style="color: var(--primary); font-weight: 700;">
+            → 수정 즉시 ①견적서·②발주서·③검수조서·④품의서 합계 및 VAT가 일괄 갱신됩니다.
+          </span>
+        </div>
+
+        <div class="doc-toolbar">
+          <div class="doc-tabs">
+            <button class="doc-tab active" data-doc="quotation">① 표준 견적서</button>
+            <button class="doc-tab" data-doc="purchase_order">② 발주서 · 작업지시서</button>
+            <button class="doc-tab" data-doc="delivery_inspection">③ 거래명세서 · 납품검수조서</button>
+            <button class="doc-tab" data-doc="expense_approval">④ 지출결의서 · 내부 품의서</button>
+          </div>
+          <button id="downloadJsonBtn" class="btn btn-sm">⬇️ 구조화 JSON 내려받기</button>
+        </div>
+
+        <div id="a4SheetContainer" class="a4-sheet"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- QR Modal -->
+  <div id="qrModal" class="modal">
+    <div class="modal-content">
+      <h3 style="margin: 0 0 4px;">모바일 · 심사위원 실시간 시연 접속</h3>
+      <p style="margin: 0; font-size: 12.5px; color: var(--muted);">
+        카메라로 QR을 스캔하면 실제 방위사업청 HWP/HWPX 파싱과 4종 문서 자동화를 직접 체험할 수 있습니다.
+      </p>
+      <img src="qr.svg" alt="GitHub Pages QR" />
+      <code style="display: block; font-size: 11px; background: #f1f5f9; padding: 6px; border-radius: 6px; margin-bottom: 12px; word-break: break-all;">
+        https://woody-korean.github.io/dsc-hwp-ai-pipeline/
+      </code>
+      <button id="closeQrBtn" class="btn btn-primary" style="width: 100%;">닫기</button>
+    </div>
+  </div>
+
+  <script src="hwp_browser_parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
