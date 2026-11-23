@@ -140,14 +140,37 @@ def load_env_file(env_path: Path) -> None:
         os.environ.setdefault(k.strip(), v.strip())
 
 
+def _extract_json_payload(raw_text: str) -> dict[str, Any]:
+    """Parse JSON even if a small local sLLM wraps output in markdown code fences."""
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        cleaned = "\n".join(lines).strip()
+    data = json.loads(cleaned)
+    for req_top in ("source_summary", "doc_chain"):
+        if req_top not in data or not isinstance(data[req_top], dict):
+            raise ValueError(f"Missing required top-level key: {req_top}")
+    for req_doc in ("quotation", "purchase_order", "delivery_inspection", "expense_approval"):
+        if req_doc not in data["doc_chain"] or not isinstance(data["doc_chain"][req_doc], dict):
+            raise ValueError(f"Missing required doc_chain key: {req_doc}")
+    if not data["doc_chain"]["quotation"].get("items"):
+        raise ValueError("doc_chain.quotation.items must be a non-empty list")
+    return data
+
+
 def call_baze_llm(
     parsed_doc: dict[str, Any],
     meta: dict[str, str],
     api_key: str,
     base_url: str,
     model: str,
+    max_retries: int = 3,
 ) -> dict[str, Any]:
-    """Call BAZE API Gateway chat completions endpoint to transform HWP text into structured JSON."""
+    """Call OpenAI-compatible gateway (BAZE cloud or Local Ollama/vLLM) with JSON retry loop."""
     endpoint = base_url.rstrip("/") + "/chat/completions"
     excerpt = parsed_doc["extracted_text"][:12000]
     user_msg = (
@@ -156,34 +179,55 @@ def call_baze_llm(
         f"[우리 중소기업 수행 맥락] {meta['sme_role']}\n\n"
         f"[HWP/HWPX 파싱 원문]\n{excerpt}"
     )
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_msg},
-        ],
-        "response_format": {"type": "json_object"},
-        "temperature": 0.2,
-    }
-    req = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "DSC-HWP-Pipeline/1.0",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        err_text = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"BAZE HTTP {exc.code}: {err_text[:400]}") from exc
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_msg},
+    ]
 
-    content = body["choices"][0]["message"]["content"]
-    return json.loads(content)
+    last_err: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        payload = {
+            "model": model,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "temperature": 0.1 if attempt > 1 else 0.2,
+        }
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key or 'local-onprem'}",
+                "Content-Type": "application/json",
+                "User-Agent": "DSC-HWP-Pipeline/1.0",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+            content = body["choices"][0]["message"]["content"]
+            return _extract_json_payload(content)
+        except urllib.error.HTTPError as exc:
+            err_text = exc.read().decode("utf-8", errors="ignore")
+            last_err = RuntimeError(f"LLM HTTP {exc.code}: {err_text[:400]}")
+            if exc.code in (401, 403):
+                raise last_err from exc
+        except (ValueError, KeyError, json.JSONDecodeError, urllib.error.URLError) as exc:
+            last_err = exc
+            # Feed schema/parse feedback back to the model for self-correction on retry
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"이전 응답 JSON 검증 실패 ({type(exc).__name__}: {exc}). "
+                        "마크다운 코드블록 없이 스키마에 맞는 순수 JSON 객체만 다시 출력하세요."
+                    ),
+                }
+            )
+        if attempt < max_retries:
+            print(f"  [RETRY {attempt}/{max_retries - 1}] {parsed_doc['filename']} -> {last_err}")
+
+    raise RuntimeError(f"Failed after {max_retries} attempts: {last_err}")
 
 
 def normalize_and_crosscheck(llm_data: dict[str, Any]) -> dict[str, Any]:
@@ -284,22 +328,49 @@ def verify_existing_json() -> int:
     return 0
 
 
+def _is_local_endpoint(url: str) -> bool:
+    return any(host in url.lower() for host in ("localhost", "127.0.0.1", "0.0.0.0", "::1"))
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run BAZE LLM HWP automation pipeline.")
+    parser = argparse.ArgumentParser(
+        description="Run HWP/HWPX -> LLM automation pipeline (BAZE Gateway or Local Ollama/vLLM)."
+    )
     parser.add_argument("--verify-only", action="store_true", help="Validate existing JSON only.")
+    parser.add_argument(
+        "--base-url",
+        help="Override OpenAI-compatible base URL (e.g. http://localhost:11434/v1 for local Ollama).",
+    )
+    parser.add_argument(
+        "--model",
+        help="Override model name (e.g. exaone3.5:7.8b or qwen2.5:14b for local inference).",
+    )
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="Max JSON schema auto-retry attempts per document (default: 3).",
+    )
     args = parser.parse_args()
 
     if args.verify_only:
         return verify_existing_json()
 
     load_env_file(ROOT_DIR / ".env")
+    base_url = (args.base_url or os.environ.get("BAZE_BASE_URL", DEFAULT_BASE_URL)).strip()
+    model = (args.model or os.environ.get("BAZE_MODEL", DEFAULT_MODEL)).strip()
     api_key = os.environ.get("BAZE_API_KEY", "").strip()
-    base_url = os.environ.get("BAZE_BASE_URL", DEFAULT_BASE_URL).strip()
-    model = os.environ.get("BAZE_MODEL", DEFAULT_MODEL).strip()
+    is_local = _is_local_endpoint(base_url)
 
-    if not api_key:
-        print("Error: BAZE_API_KEY is not set in environment or .env.", file=sys.stderr)
+    if not api_key and not is_local:
+        print(
+            "Error: BAZE_API_KEY is not set in environment or .env "
+            "(or pass --base-url http://localhost:11434/v1 for air-gapped local sLLM).",
+            file=sys.stderr,
+        )
         return 1
+    if is_local and not api_key:
+        api_key = "local-onprem"
 
     DOCS_SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
@@ -317,9 +388,11 @@ def main() -> int:
         parsed = parse_hwp_any(src_path)
         print(
             f"Parsed {fname} ({parsed['format_type']}, {parsed['char_count']} chars) "
-            f"-> calling BAZE ({model})..."
+            f"-> calling {'Local sLLM' if is_local else 'BAZE'} ({model})..."
         )
-        llm_raw = call_baze_llm(parsed, meta, api_key, base_url, model)
+        llm_raw = call_baze_llm(
+            parsed, meta, api_key, base_url, model, max_retries=max(1, args.max_retries)
+        )
         llm_norm = normalize_and_crosscheck(llm_raw)
 
         cases.append(

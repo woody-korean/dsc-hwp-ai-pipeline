@@ -45,6 +45,9 @@
       <button class="mode-tab" data-mode="upload">
         📤 2. 내 HWP / HWPX 파일 직접 업로드 · 브라우저 실시간 파싱
       </button>
+      <button class="mode-tab" data-mode="security">
+        🔒 3. 보안(Local sLLM) · 사내 컴퓨팅 비용 및 기회비용 시뮬레이터
+      </button>
     </div>
 
     <!-- Mode 1: Precomputed Real DAPA Cases -->
@@ -80,6 +83,101 @@
       </div>
     </section>
 
+    <!-- Mode 3: Air-Gapped Security, Local sLLM & TCO Simulator -->
+    <section id="securitySection" class="hidden">
+      <div class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">🔒</span> 연구소·방산 기밀 유출 방지: On-Premise Local sLLM 아키텍처</div>
+          <span class="pill hwpx">Zero Data Leakage · 폐쇄망 실행 지원</span>
+        </div>
+        <p style="margin-top: 0; font-size: 13.5px;">
+          국방·출연연 납품 기업은 보안서약 대상 제안요청서(RFP)·사내 원가표·시험성적서를 외부 클라우드로 전송할 수 없습니다.
+          본 파이프라인은 <strong>① HWP 파싱(Python)</strong>과 <strong>③ 부가세·3-Way 산술 검증(Python/JS)</strong>을 100% 결정론적 코드로 분리했기 때문에,
+          <strong>② 핵심 필드 JSON 추출만 국내외 경량 오픈소스 Local sLLM</strong>으로 대체해도 동일한 정확도를 유지할 수 있습니다.
+        </p>
+        <div class="kv-grid" style="margin-bottom: 14px;">
+          <div class="kv-box">
+            <div class="kv-label">CLI 폐쇄망 전환 명령 (Ollama 예시)</div>
+            <div class="kv-val" style="font-size: 12px; font-family: monospace;">
+              python3 pipeline/baze_pipeline.py --base-url http://localhost:11434/v1 --model exaone3.5:7.8b
+            </div>
+          </div>
+          <div class="kv-box">
+            <div class="kv-label">LLM 추론 부담 경감</div>
+            <div class="kv-val">입력 ~3,000토큰 → 출력 ~800토큰(JSON) · 산술/서식은 코드 전담</div>
+          </div>
+          <div class="kv-box">
+            <div class="kv-label">실패 자동 복구</div>
+            <div class="kv-val">JSON 스키마 에러 역주입 3회 자동 재시도 (잔여 실패율 0.34% 이하)</div>
+          </div>
+        </div>
+        <table class="doc-table">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th>로컬 오픈웨이트 모델</th>
+              <th>권장 VRAM (Q4 양자화)</th>
+              <th>한국어 공문·JSON 적합성</th>
+              <th>권장 사내 환경</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="center"><strong>국내 모델</strong></td>
+              <td><strong>LG AI Research EXAONE 3.5 (7.8B / 32B)</strong></td>
+              <td class="center">7.8B: ~6GB / 32B: ~20GB</td>
+              <td>한국어 공문서·지시이행 및 JSON 구조화 최상위권</td>
+              <td>단일 RTX 4070 Ti~4090 PC (32B는 2×GPU 서버)</td>
+            </tr>
+            <tr>
+              <td class="center"><strong>국내 모델</strong></td>
+              <td><strong>Upstage SOLAR-10.7B / 야놀자 EEVE-10.8B</strong></td>
+              <td class="center">~7~8GB</td>
+              <td>한국어 문맥·어휘 이해 우수, 16GB GPU 내 빠른 응답</td>
+              <td>사내 업무용 단일 GPU PC</td>
+            </tr>
+            <tr>
+              <td class="center"><strong>해외 오픈소스</strong></td>
+              <td><strong>Alibaba Qwen 2.5 (7B / 14B / 32B)</strong></td>
+              <td class="center">14B: ~10GB / 32B: ~20GB</td>
+              <td>JSON 스키마 준수율 및 한국어·다국어 긴 문맥 강점 (Apache 2.0)</td>
+              <td>14B: RTX 4090 PC / 32B: 전용 미니서버</td>
+            </tr>
+            <tr>
+              <td class="center"><strong>해외 오픈소스</strong></td>
+              <td><strong>Meta Llama 3.1 (8B) / Google Gemma 2·3 (9B~27B)</strong></td>
+              <td class="center">~6~18GB</td>
+              <td>Ollama/vLLM 생태계 표준 JSON 모드(GBNF) 호환</td>
+              <td>범용 사내 워크스테이션</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">₩</span> 사내 컴퓨팅 비용(CapEx·전력) 및 실패·재시도 기회비용 시뮬레이터</div>
+          <span class="pill">시나리오 추정 계산기 (실시간 ROI 산출)</span>
+        </div>
+        <div class="sot-bar" style="gap: 14px;">
+          <label>월 문서 처리량(건): <input id="simVolume" type="number" min="5" max="500" value="40" style="width: 72px;" /></label>
+          <label>기존 수작업(분/건): <input id="simManualMin" type="number" min="15" max="300" value="105" style="width: 72px;" /></label>
+          <label>sLLM 1차 실패·재시도율(%): <input id="simRetryPct" type="number" min="0" max="50" value="15" style="width: 68px;" /></label>
+          <label>인적 검수·수정(분/건): <input id="simReviewMin" type="number" min="1" max="30" value="4" style="width: 68px;" /></label>
+          <label>실무자 시급(원): <input id="simWage" type="number" min="15000" max="100000" step="1000" value="35000" style="width: 92px;" /></label>
+          <label>사내 GPU 구성:
+            <select id="simHwTier" style="padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700;">
+              <option value="pc">옵션 A: 단일 RTX GPU PC (350만 원 · 7.8B~14B)</option>
+              <option value="server">옵션 B: 전용 2×GPU 미니서버 (950만 원 · 32B)</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="simResultGrid" class="kv-grid"></div>
+        <div id="simCompareTable"></div>
+      </div>
+    </section>
+
     <!-- Pipeline Results Container -->
     <main id="pipelineWorkspace">
       <!-- Step 1: HWP/HWPX Raw Parser -->
@@ -93,7 +191,7 @@
           <summary style="cursor: pointer; font-weight: 700; font-size: 13px; margin-bottom: 8px;">
             파싱 추출 원문 및 표(Markdown Table) 확인
           </summary>
-          <div id="rawExtractedBox" class="raw-text-box"></div>
+          <div id="rawExtractedBox" class="raw-text-box">⏳ 방위사업청 HWP/HWPX 파싱 데이터를 불러오는 중...</div>
         </details>
       </section>
 

@@ -524,6 +524,94 @@
     }
   }
 
+  function renderSecuritySimulator() {
+    const volume = Math.max(1, parseInt(el("simVolume").value, 10) || 40);
+    const manualMin = Math.max(5, parseInt(el("simManualMin").value, 10) || 105);
+    const rawRetry = parseFloat(el("simRetryPct").value);
+    const retryRate = Math.min(0.6, Math.max(0, (Number.isFinite(rawRetry) ? rawRetry : 15) / 100));
+    const reviewMin = Math.max(1, parseInt(el("simReviewMin").value, 10) || 4);
+    const wage = Math.max(10000, parseInt(el("simWage").value, 10) || 35000);
+    const hwTier = el("simHwTier").value;
+
+    const capex = hwTier === "server" ? 9500000 : 3500000;
+    const monthlyDepr = Math.round(capex / 36);
+    const monthlyElec = hwTier === "server" ? 20000 : 7500;
+    const monthlyHw = monthlyDepr + monthlyElec;
+
+    const expectedRuns = 1 / Math.max(0.1, 1 - retryRate);
+    const residualFailPct = Math.pow(retryRate, 3) * 100;
+    const gpuSecPerDoc = Math.round(20 * expectedRuns);
+    const extraRetryMinPerDoc = (20 * (expectedRuns - 1)) / 60;
+
+    const manualHours = (volume * manualMin) / 60;
+    const manualCost = Math.round(manualHours * wage);
+
+    const unguardedHours = (volume * Math.max(20, manualMin * 0.35)) / 60;
+    const unguardedCost = Math.round(unguardedHours * wage) + monthlyHw;
+
+    const hybridHours = (volume * (reviewMin + extraRetryMinPerDoc)) / 60;
+    const hybridLaborCost = Math.round(hybridHours * wage);
+    const hybridTotalCost = hybridLaborCost + monthlyHw;
+
+    const netSavings = manualCost - hybridTotalCost;
+    const timeSavedPct = (((manualHours - hybridHours) / manualHours) * 100).toFixed(1);
+    const paybackMonths = netSavings > 0 ? (capex / netSavings).toFixed(1) : "∞";
+
+    el("simResultGrid").innerHTML = [
+      ["기대 추론 횟수 / 잔여 실패율(3회 재시도)", `${expectedRuns.toFixed(2)}회/건 · ${residualFailPct.toFixed(2)}%`],
+      ["기존 수작업 월 기회비용", `${manualHours.toFixed(1)}시간 · ${won(manualCost)}`],
+      ["본 시스템 월 총비용 (GPU+전기+검수)", `${hybridHours.toFixed(1)}시간 · ${won(hybridTotalCost)}`],
+      ["월 순절감액 (Net ROI) · 시간 절감", `${won(netSavings)}/월 · ${timeSavedPct}%↓`],
+      ["하드웨어 투자 회수 기간 (Payback)", `${paybackMonths}개월 (초기 ${won(capex)})`],
+    ]
+      .map(
+        ([k, v]) =>
+          `<div class="kv-box"><div class="kv-label">${esc(k)}</div><div class="kv-val" style="color:var(--primary);">${esc(v)}</div></div>`
+      )
+      .join("");
+
+    el("simCompareTable").innerHTML = `
+      <table class="doc-table">
+        <thead>
+          <tr>
+            <th>운영 시나리오 (월 ${num(volume)}건 기준)</th>
+            <th>월 인력 투입시간</th>
+            <th>월 인건비·재시도 기회비용</th>
+            <th>월 GPU 감가(36개월)+전기료</th>
+            <th>월 총비용 합계</th>
+            <th>비고</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. 기존 수작업 (As-Is)</strong></td>
+            <td class="num">${manualHours.toFixed(1)}시간</td>
+            <td class="num">${won(manualCost)}</td>
+            <td class="num">0원</td>
+            <td class="num"><strong>${won(manualCost)}</strong></td>
+            <td>납기 지연·오기입·연구인력 이탈</td>
+          </tr>
+          <tr>
+            <td><strong>2. 무검증 자작 LLM</strong> (파서·3-Way 없음)</td>
+            <td class="num">${unguardedHours.toFixed(1)}시간</td>
+            <td class="num">${won(Math.round(unguardedHours * wage))}</td>
+            <td class="num">${won(monthlyHw)}</td>
+            <td class="num">${won(unguardedCost)}</td>
+            <td>할루시네이션·산술 재검산 부담</td>
+          </tr>
+          <tr class="total-highlight">
+            <td><strong>3. 본 하이브리드 파이프라인 (Local sLLM)</strong></td>
+            <td class="num">${hybridHours.toFixed(1)}시간</td>
+            <td class="num">${won(hybridLaborCost)}</td>
+            <td class="num">${won(monthlyHw)} (${won(monthlyDepr)}+${won(monthlyElec)})</td>
+            <td class="num"><strong>${won(hybridTotalCost)}</strong></td>
+            <td>건당 GPU ~${gpuSecPerDoc}초 · 정보유출 0%</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+  }
+
   function bindEvents() {
     document.querySelectorAll(".mode-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -532,8 +620,18 @@
         const mode = btn.dataset.mode;
         el("corpusSection").classList.toggle("hidden", mode !== "corpus");
         el("uploadSection").classList.toggle("hidden", mode !== "upload");
+        el("securitySection").classList.toggle("hidden", mode !== "security");
+        el("pipelineWorkspace").classList.toggle("hidden", mode === "security");
+        if (mode === "security") renderSecuritySimulator();
       });
     });
+
+    ["simVolume", "simManualMin", "simRetryPct", "simReviewMin", "simWage", "simHwTier"].forEach(
+      (id) => {
+        el(id).addEventListener("input", renderSecuritySimulator);
+        el(id).addEventListener("change", renderSecuritySimulator);
+      }
+    );
 
     document.querySelectorAll(".doc-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
