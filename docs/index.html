@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>충남대 B팀 | 대전 중소기업 HWP·LLM 반복 행정업무 자동화 시연</title>
+  <title>충남대 B팀 | HWP·LLM 기반 대전 중소기업 행정서식 자동화 시연</title>
   <link rel="stylesheet" href="styles.css" />
   <!-- Browser-side pure JS HWP 5.0 (CFB+zlib) & HWPX (ZIP+XML) libraries -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -12,142 +12,125 @@
 </head>
 <body>
   <div class="container">
-    <!-- Hero -->
-    <header class="hero">
-      <div class="hero-left">
-        <div class="badge-row">
-          <span class="badge accent">2026 DSC 공유대학 AI 실전 프로젝트 챌린지</span>
-          <span class="badge">과제 4 · 중소기업 반복 행정업무 개선</span>
-          <span class="badge">충남대 B팀 (신수하 · 우디)</span>
+    <!-- Editorial Masthead -->
+    <header class="masthead">
+      <div class="masthead-left">
+        <div class="masthead-kicker">
+          2026 DSC 공유대학 AI 실전 프로젝트 챌린지 · 과제 4 (중소기업 반복 행정업무 개선) · 충남대 B팀 (신수하 외 1인)
         </div>
-        <h1>국방·공공 HWP/HWPX 문서 파싱 × BAZE LLM<br />대전 B2B 중소기업 4종 행정서식 원클릭 자동화</h1>
-        <p>
-          대전 대덕산단·대덕특구 배후 정밀제조·방산·연구기자재 중소기업(<strong>(주)대덕정밀기계</strong> 페르소나)이
-          <strong>방위사업청 실제 공고(.hwp / .hwpx)</strong>를 1회 파싱해
-          <strong>견적서 → 발주·작업지시서 → 거래명세·납품검수서 → 품의·지출결의서</strong>를 한 번에 생성·교차검증하는 실전 시연 플랫폼입니다.
+        <h1>국방·공공 HWP·HWPX 기반 중소기업 4종 행정서식 자동화 시스템</h1>
+        <p class="masthead-sub">
+          대전 대덕산단·대덕특구 배후 B2B 정밀제조·방산 중소기업(<strong>(주)대덕정밀기계</strong> 페르소나)이
+          <strong>방위사업청 실제 공고(.hwp / .hwpx)</strong> 1회 파싱으로
+          <strong>견적서 · 발주·작업지시서 · 납품검수조서 · 지출결의서</strong>를 일괄 생성 및 교차검증합니다.
         </p>
-        <div style="margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px;">
-          <button id="openQrBtn" class="btn btn-accent">📱 발표용 QR 코드 크게 보기</button>
-          <a href="https://github.com/woody-korean/dsc-hwp-ai-pipeline" target="_blank" rel="noopener" class="btn">💻 GitHub 저장소 &amp; 파이프라인 코드</a>
-        </div>
       </div>
-      <div class="hero-qr-card">
-        <img src="qr.svg" alt="라이브 데모 접속 QR 코드" />
-        <span>모바일 실시간 시연 QR</span>
+      <div class="masthead-right">
+        <div class="masthead-actions">
+          <button id="openQrBtn" type="button" class="btn btn-sm">QR 코드 크게 보기</button>
+          <a href="https://github.com/woody-korean/dsc-hwp-ai-pipeline" target="_blank" rel="noopener" class="btn btn-sm">GitHub 저장소</a>
+        </div>
+        <button type="button" class="qr-thumb-btn" onclick="document.getElementById('openQrBtn').click()" title="QR 코드 확대">
+          <img src="qr.svg" alt="라이브 데모 QR 코드" />
+          <span>모바일 시연 QR</span>
+        </button>
       </div>
     </header>
 
-    <!-- Mode Switch -->
-    <div class="mode-tabs">
-      <button class="mode-tab active" data-mode="corpus">
-        🏛️ 1. 실제 방위사업청 HWP/HWPX 파싱 &amp; BAZE LLM 파이프라인 (4건)
-      </button>
-      <button class="mode-tab" data-mode="upload">
-        📤 2. 내 HWP / HWPX 파일 직접 업로드 · 브라우저 실시간 파싱
-      </button>
-      <button class="mode-tab" data-mode="security">
-        🔒 3. 보안(Local sLLM) · 사내 컴퓨팅 비용 및 기회비용 시뮬레이터
-      </button>
-    </div>
+    <!-- Primary Mode Tabs -->
+    <nav class="mode-tabs" aria-label="시연 모드 전환">
+      <button type="button" class="mode-tab active" data-mode="corpus">1. 방위사업청 실물 HWP/HWPX 변환 시연</button>
+      <button type="button" class="mode-tab" data-mode="upload">2. 직접 HWP/HWPX 파일 업로드</button>
+      <button type="button" class="mode-tab" data-mode="security">3. 폐쇄망 Local sLLM 및 기회비용 시뮬레이터</button>
+    </nav>
 
-    <!-- Mode 1: Precomputed Real DAPA Cases -->
-    <section id="corpusSection">
+    <!-- Mode 1: Real DAPA Corpus -->
+    <section id="corpusSection" class="selector-panel">
+      <div class="selector-head">
+        <span><strong>시연 문서 선택</strong> — 방위사업청(dapa.go.kr)에서 직접 수집한 실물 한글 문서 4종 (BAZE <code class="mono">gpt-6.1-terra</code> 실측 변환본 탑재)</span>
+        <span>문단 · 표 · 금액 산식 검증 완료</span>
+      </div>
       <div id="corpusGrid" class="corpus-grid"></div>
     </section>
 
-    <!-- Mode 2: Live Browser Upload -->
-    <section id="uploadSection" class="hidden">
-      <div class="card">
-        <div class="card-header">
-          <div class="step-badge"><span class="step-num">U</span> 내 PC/모바일 HWP·HWPX 실시간 파싱</div>
-          <span class="pill">서버 업로드 없이 브라우저 내 100% 직접 해석</span>
-        </div>
-        <div id="dropZone" class="upload-zone">
-          <div style="font-size: 32px; margin-bottom: 6px;">📄</div>
-          <div style="font-weight: 800; font-size: 15px; margin-bottom: 4px;">
-            여기에 <code>.hwp</code> (OLE2 바이너리) 또는 <code>.hwpx</code> (OWPML XML) 파일을 끌어다 놓거나 클릭하세요
-          </div>
-          <div style="font-size: 12.5px; color: var(--muted);">
-            위 탭에서 원본 방위사업청 HWP/HWPX 파일을 내려받은 뒤 그대로 올려서 테스트할 수도 있습니다.
-          </div>
-          <input id="fileInput" type="file" accept=".hwp,.hwpx" class="hidden" />
-        </div>
-        <div class="api-box">
-          <strong>선택 사항 — 실시간 BAZE LLM API 연동 (미입력 시 내장 스마트 규칙 파서로 즉시 4종 서식 바인딩):</strong>
-          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; align-items: center;">
-            <input id="liveApiKey" type="password" placeholder="선택: BAZE API Key (예: baze_... — 브라우저 세션에만 유지)" />
-            <span style="color: var(--muted); font-size: 12px;">※ 보안상 GitHub 코드에는 키를 저장하지 않습니다.</span>
-          </div>
-        </div>
-        <div id="uploadStatus" style="margin-top: 10px; font-size: 13px; font-weight: 700;"></div>
+    <!-- Mode 2: Live Client-side Upload -->
+    <section id="uploadSection" class="card hidden">
+      <div class="card-header">
+        <div class="step-badge"><span class="step-num">LIVE</span> 브라우저 직접 HWP / HWPX 파싱 및 4종 서식 변환</div>
+        <span class="header-tag">Pure JS OLE2 / XML Parser</span>
       </div>
+      <div id="dropZone" class="upload-box">
+        <div style="font-size: 14px; font-weight: 700; color: var(--ink); margin-bottom: 4px;">
+          여기에 .hwp 또는 .hwpx 파일을 끌어다 놓거나 클릭해 선택하십시오.
+        </div>
+        <div style="font-size: 12.5px; color: var(--muted);">
+          바이너리(.hwp OLE2) 및 XML(.hwpx ZIP) 파싱은 브라우저 로컬 메모리에서 즉시 처리됩니다.
+        </div>
+        <input id="fileInput" type="file" accept=".hwp,.hwpx" class="hidden" />
+      </div>
+      <div class="upload-meta-row">
+        <span>
+          [선택] BAZE API Key 입력 시 <code class="mono">gpt-6.1-terra</code> 실시간 추출, 미입력 시 파싱 원문 기반 구조화 Fallback이 동작합니다.
+        </span>
+        <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--ink);">
+          BAZE API Key:
+          <input id="liveApiKey" type="password" class="key-input" placeholder="선택 입력 (미입력 시 로컬 구조화)" />
+        </label>
+      </div>
+      <div id="uploadStatus" class="status-line"></div>
     </section>
 
-    <!-- Mode 3: Air-Gapped Security, Local sLLM & TCO Simulator -->
+    <!-- Mode 3: Security Architecture & On-Premise TCO Simulator -->
     <section id="securitySection" class="hidden">
       <div class="card">
         <div class="card-header">
-          <div class="step-badge"><span class="step-num">🔒</span> 연구소·방산 기밀 유출 방지: On-Premise Local sLLM 아키텍처</div>
-          <span class="pill hwpx">Zero Data Leakage · 폐쇄망 실행 지원</span>
+          <div class="step-badge"><span class="step-num">SEC</span> 정보유출 차단 아키텍처 및 국내·해외 오픈소스 Local sLLM 적합성</div>
+          <span class="header-tag">대덕특구 출연연·방산 협력사 폐쇄망 대응</span>
         </div>
-        <p style="margin-top: 0; font-size: 13.5px;">
-          국방·출연연 납품 기업은 보안서약 대상 제안요청서(RFP)·사내 원가표·시험성적서를 외부 클라우드로 전송할 수 없습니다.
-          본 파이프라인은 <strong>① HWP 파싱(Python)</strong>과 <strong>③ 부가세·3-Way 산술 검증(Python/JS)</strong>을 100% 결정론적 코드로 분리했기 때문에,
-          <strong>② 핵심 필드 JSON 추출만 국내외 경량 오픈소스 Local sLLM</strong>으로 대체해도 동일한 정확도를 유지할 수 있습니다.
-        </p>
-        <div class="kv-grid" style="margin-bottom: 14px;">
-          <div class="kv-box">
-            <div class="kv-label">CLI 폐쇄망 전환 명령 (Ollama 예시)</div>
-            <div class="kv-val" style="font-size: 12px; font-family: monospace;">
-              python3 pipeline/baze_pipeline.py --base-url http://localhost:11434/v1 --model exaone3.5:7.8b
-            </div>
-          </div>
-          <div class="kv-box">
-            <div class="kv-label">LLM 추론 부담 경감</div>
-            <div class="kv-val">입력 ~3,000토큰 → 출력 ~800토큰(JSON) · 산술/서식은 코드 전담</div>
-          </div>
-          <div class="kv-box">
-            <div class="kv-label">실패 자동 복구</div>
-            <div class="kv-val">JSON 스키마 에러 역주입 3회 자동 재시도 (잔여 실패율 0.34% 이하)</div>
-          </div>
+        <div class="callout-note">
+          <strong>보안 설계 원칙:</strong> 본 파이프라인의 <strong>HWP/HWPX 파서(규칙 기반 Python/JS)</strong>와
+          <strong>3-Way 산식 교차검증기(결정론적 코드)</strong>는 외부 AI 통신 없이 100% 사내에서 실행됩니다.
+          핵심 추론 엔진 또한 표준 OpenAI 호환 API(<code class="mono">/v1/chat/completions</code>)로 추상화되어,
+          방산·R&amp;D 문서는 URL 교체만으로 <strong>사내 폐쇄망 Local sLLM(Ollama · vLLM)</strong>으로 전환해 외부 유출 0%를 보장합니다.
         </div>
-        <table class="doc-table">
+
+        <table class="meta-table">
           <thead>
             <tr>
-              <th>구분</th>
-              <th>로컬 오픈웨이트 모델</th>
-              <th>권장 VRAM (Q4 양자화)</th>
-              <th>한국어 공문·JSON 적합성</th>
-              <th>권장 사내 환경</th>
+              <th style="width: 11%;">구분</th>
+              <th style="width: 25%;">로컬 오픈웨이트 모델</th>
+              <th style="width: 17%;">권장 VRAM (Q4)</th>
+              <th style="width: 27%;">한국어 공문 · JSON 적합성</th>
+              <th style="width: 20%;">권장 사내 환경</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td class="center"><strong>국내 모델</strong></td>
-              <td><strong>LG AI Research EXAONE 3.5 (7.8B / 32B)</strong></td>
-              <td class="center">7.8B: ~6GB / 32B: ~20GB</td>
+              <td><strong>LG AI Research EXAONE 3.5</strong> (7.8B / 32B)</td>
+              <td class="mono">7.8B ~6GB / 32B ~20GB</td>
               <td>한국어 공문서·지시이행 및 JSON 구조화 최상위권</td>
-              <td>단일 RTX 4070 Ti~4090 PC (32B는 2×GPU 서버)</td>
+              <td>단일 RTX 4070 Ti~4090 PC</td>
             </tr>
             <tr>
               <td class="center"><strong>국내 모델</strong></td>
-              <td><strong>Upstage SOLAR-10.7B / 야놀자 EEVE-10.8B</strong></td>
-              <td class="center">~7~8GB</td>
+              <td><strong>Upstage SOLAR-10.7B</strong> / 야놀자 EEVE-10.8B</td>
+              <td class="mono">~7~8GB</td>
               <td>한국어 문맥·어휘 이해 우수, 16GB GPU 내 빠른 응답</td>
               <td>사내 업무용 단일 GPU PC</td>
             </tr>
             <tr>
               <td class="center"><strong>해외 오픈소스</strong></td>
-              <td><strong>Alibaba Qwen 2.5 (7B / 14B / 32B)</strong></td>
-              <td class="center">14B: ~10GB / 32B: ~20GB</td>
-              <td>JSON 스키마 준수율 및 한국어·다국어 긴 문맥 강점 (Apache 2.0)</td>
-              <td>14B: RTX 4090 PC / 32B: 전용 미니서버</td>
+              <td><strong>Alibaba Qwen 2.5</strong> (7B / 14B / 32B)</td>
+              <td class="mono">14B ~10GB / 32B ~20GB</td>
+              <td>JSON 스키마 준수율 및 긴 문맥 강점 (Apache 2.0)</td>
+              <td>RTX 4090 PC 또는 2xGPU 서버</td>
             </tr>
             <tr>
               <td class="center"><strong>해외 오픈소스</strong></td>
-              <td><strong>Meta Llama 3.1 (8B) / Google Gemma 2·3 (9B~27B)</strong></td>
-              <td class="center">~6~18GB</td>
-              <td>Ollama/vLLM 생태계 표준 JSON 모드(GBNF) 호환</td>
+              <td><strong>Meta Llama 3.1 (8B)</strong> / Google Gemma 2·3</td>
+              <td class="mono">~6~18GB</td>
+              <td>Ollama/vLLM 표준 JSON 모드(GBNF) 호환</td>
               <td>범용 사내 워크스테이션</td>
             </tr>
           </tbody>
@@ -156,99 +139,95 @@
 
       <div class="card">
         <div class="card-header">
-          <div class="step-badge"><span class="step-num">₩</span> 사내 컴퓨팅 비용(CapEx·전력) 및 실패·재시도 기회비용 시뮬레이터</div>
-          <span class="pill">시나리오 추정 계산기 (실시간 ROI 산출)</span>
+          <div class="step-badge"><span class="step-num">ROI</span> 사내 컴퓨팅 자원(CapEx·전력) 및 실패·재시도 기회비용 시뮬레이터</div>
+          <span class="header-tag">시나리오 추정 계산기</span>
         </div>
-        <div class="sot-bar" style="gap: 14px;">
-          <label>월 문서 처리량(건): <input id="simVolume" type="number" min="5" max="500" value="40" style="width: 72px;" /></label>
-          <label>기존 수작업(분/건): <input id="simManualMin" type="number" min="15" max="300" value="105" style="width: 72px;" /></label>
-          <label>sLLM 1차 실패·재시도율(%): <input id="simRetryPct" type="number" min="0" max="50" value="15" style="width: 68px;" /></label>
-          <label>인적 검수·수정(분/건): <input id="simReviewMin" type="number" min="1" max="30" value="4" style="width: 68px;" /></label>
-          <label>실무자 시급(원): <input id="simWage" type="number" min="15000" max="100000" step="1000" value="35000" style="width: 92px;" /></label>
+        <div class="sot-bar">
+          <label>월 문서량(건): <input id="simVolume" type="number" min="5" max="500" value="40" /></label>
+          <label>기존 수작업(분/건): <input id="simManualMin" type="number" min="15" max="300" value="105" /></label>
+          <label>1차 재시도율(%): <input id="simRetryPct" type="number" min="0" max="50" value="15" /></label>
+          <label>인적 검수(분/건): <input id="simReviewMin" type="number" min="1" max="30" value="4" /></label>
+          <label>시급(원): <input id="simWage" type="number" min="15000" max="100000" step="1000" value="35000" /></label>
           <label>사내 GPU 구성:
-            <select id="simHwTier" style="padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 700;">
+            <select id="simHwTier">
               <option value="pc">옵션 A: 단일 RTX GPU PC (350만 원 · 7.8B~14B)</option>
-              <option value="server">옵션 B: 전용 2×GPU 미니서버 (950만 원 · 32B)</option>
+              <option value="server">옵션 B: 전용 2xGPU 미니서버 (950만 원 · 32B)</option>
             </select>
           </label>
         </div>
 
-        <div id="simResultGrid" class="kv-grid"></div>
+        <div id="simResultGrid"></div>
         <div id="simCompareTable"></div>
       </div>
     </section>
 
-    <!-- Pipeline Results Container -->
+    <!-- Main 3-Step Pipeline Workspace -->
     <main id="pipelineWorkspace">
-      <!-- Step 1: HWP/HWPX Raw Parser -->
+      <!-- Step 1 -->
       <section class="card">
         <div class="card-header">
-          <div class="step-badge"><span class="step-num">1</span> 한국형 HWP / HWPX 원천 바이너리·XML 파싱</div>
+          <div class="step-badge"><span class="step-num">01</span> 한국형 HWP / HWPX 원천 바이너리 · XML 파싱</div>
           <div id="step1Actions" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
         </div>
-        <div id="parseKvGrid" class="kv-grid"></div>
+        <div id="parseKvGrid"></div>
         <details open>
-          <summary style="cursor: pointer; font-weight: 700; font-size: 13px; margin-bottom: 8px;">
-            파싱 추출 원문 및 표(Markdown Table) 확인
+          <summary style="cursor: pointer; font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--ink);">
+            파싱 추출 원문 및 표(Markdown Table) 보기
           </summary>
-          <div id="rawExtractedBox" class="raw-text-box">⏳ 방위사업청 HWP/HWPX 파싱 데이터를 불러오는 중...</div>
+          <div id="rawExtractedBox" class="raw-text-box">방위사업청 HWP/HWPX 파싱 데이터를 불러오는 중입니다...</div>
         </details>
       </section>
 
-      <!-- Step 2: BAZE LLM Extraction & Alerts -->
+      <!-- Step 2 -->
       <section class="card">
         <div class="card-header">
-          <div class="step-badge"><span class="step-num">2</span> BAZE LLM (gpt-6.1-terra) 핵심 정보 추출 &amp; 행정 리스크 진단</div>
-          <span id="llmMetaBadge" class="pill hwpx">BAZE API Gateway 검증 완료</span>
+          <div class="step-badge"><span class="step-num">02</span> AI 핵심 정보 추출 및 실무 리스크 진단</div>
+          <span id="llmMetaBadge" class="header-tag">BAZE API Gateway 검증 완료</span>
         </div>
         <div class="grid-2">
           <div>
-            <div id="summaryKvGrid" class="kv-grid"></div>
-            <div style="font-size: 13px; background: var(--surface-alt); border: 1px solid var(--border); padding: 12px; border-radius: 10px;">
-              <strong>참가자격 · 핵심 요구규격 요약:</strong>
-              <p id="eligibilityText" style="margin: 4px 0 8px;"></p>
-              <strong>주요 일정 및 필수 서류:</strong>
-              <ul id="scheduleAttachList" style="margin: 4px 0 0; padding-left: 18px;"></ul>
+            <div id="summaryKvGrid"></div>
+            <div class="text-block">
+              <div class="text-block-label">참가자격 및 핵심 요구규격</div>
+              <p id="eligibilityText"></p>
+              <div class="text-block-label">주요 일정 및 필수 서류</div>
+              <ul id="scheduleAttachList" class="plain-list"></ul>
             </div>
           </div>
           <div>
-            <div style="font-weight: 800; font-size: 13.5px; margin-bottom: 8px; color: var(--fail);">
-              ⚠️ AI 행정 누락 방지 체크포인트 (Human-in-the-Loop 알림)
-            </div>
+            <div class="subhead-row">실무 리스크 및 누락 방지 체크포인트 (Human-in-the-Loop)</div>
             <div id="riskAlertsBox"></div>
           </div>
         </div>
       </section>
 
-      <!-- Step 3: 4-Doc Chain & 3-Way Verification -->
+      <!-- Step 3 -->
       <section class="card">
         <div class="card-header">
-          <div class="step-badge"><span class="step-num">3</span> 단일 원천(Single Source of Truth) 기반 4종 행정서식 자동생성 &amp; 3-Way 교차검증</div>
+          <div class="step-badge"><span class="step-num">03</span> 단일 원천 기반 4종 행정서식 자동생성 및 3-Way 교차검증</div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button id="toggleMismatchBtn" class="btn btn-sm">🧪 수량/단가 불일치 오류 탐지 시연</button>
-            <button id="printBtn" class="btn btn-primary btn-sm">🖨️ 현재 서식 A4 인쇄 / PDF</button>
+            <button id="toggleMismatchBtn" type="button" class="btn btn-sm">수량·금액 불일치 탐지 시연</button>
+            <button id="printBtn" type="button" class="btn btn-primary btn-sm">현재 서식 A4 인쇄 / PDF</button>
           </div>
         </div>
 
-        <div id="crossCheckGrid" class="crosscheck-grid"></div>
+        <div id="crossCheckGrid"></div>
 
         <div class="sot-bar">
-          <strong>⚡ 실시간 Single Source 연동 테스트 (1번 품목 기준):</strong>
-          <label>수량: <input id="liveQtyInput" type="number" min="1" step="1" /></label>
-          <label>단가(원): <input id="livePriceInput" type="number" min="0" step="100000" /></label>
-          <span style="color: var(--primary); font-weight: 700;">
-            → 수정 즉시 ①견적서·②발주서·③검수조서·④품의서 합계 및 VAT가 일괄 갱신됩니다.
-          </span>
+          <strong>실시간 단일 원천(Single Source) 연동 (1번 품목):</strong>
+          <label>수량 <input id="liveQtyInput" type="number" min="1" step="1" /></label>
+          <label>단가(원) <input id="livePriceInput" type="number" min="0" step="100000" /></label>
+          <span class="sot-note">수량 또는 단가를 변경하면 아래 4종 서식의 합계금액·부가세·검수 판정이 즉시 동기화됩니다.</span>
         </div>
 
         <div class="doc-toolbar">
           <div class="doc-tabs">
-            <button class="doc-tab active" data-doc="quotation">① 표준 견적서</button>
-            <button class="doc-tab" data-doc="purchase_order">② 발주서 · 작업지시서</button>
-            <button class="doc-tab" data-doc="delivery_inspection">③ 거래명세서 · 납품검수조서</button>
-            <button class="doc-tab" data-doc="expense_approval">④ 지출결의서 · 내부 품의서</button>
+            <button type="button" class="doc-tab active" data-doc="quotation">1. 표준 견적서</button>
+            <button type="button" class="doc-tab" data-doc="purchase_order">2. 발주서 · 작업지시서</button>
+            <button type="button" class="doc-tab" data-doc="delivery_inspection">3. 거래명세서 · 납품검수조서</button>
+            <button type="button" class="doc-tab" data-doc="expense_approval">4. 지출결의서 · 내부 품의서</button>
           </div>
-          <button id="downloadJsonBtn" class="btn btn-sm">⬇️ 구조화 JSON 내려받기</button>
+          <button id="downloadJsonBtn" type="button" class="btn btn-sm" style="margin-bottom: 4px;">구조화 JSON 저장</button>
         </div>
 
         <div id="a4SheetContainer" class="a4-sheet"></div>
@@ -259,15 +238,15 @@
   <!-- QR Modal -->
   <div id="qrModal" class="modal">
     <div class="modal-content">
-      <h3 style="margin: 0 0 4px;">모바일 · 심사위원 실시간 시연 접속</h3>
+      <h3 style="margin: 0 0 6px; font-size: 16px; color: var(--ink);">모바일 · 현장 시연 QR 접속</h3>
       <p style="margin: 0; font-size: 12.5px; color: var(--muted);">
-        카메라로 QR을 스캔하면 실제 방위사업청 HWP/HWPX 파싱과 4종 문서 자동화를 직접 체험할 수 있습니다.
+        스마트폰 카메라로 스캔하면 실제 방위사업청 HWP·HWPX 파싱과 4종 문서 자동화를 직접 확인할 수 있습니다.
       </p>
-      <img src="qr.svg" alt="GitHub Pages QR" />
-      <code style="display: block; font-size: 11px; background: #f1f5f9; padding: 6px; border-radius: 6px; margin-bottom: 12px; word-break: break-all;">
+      <img src="qr.svg" alt="GitHub Pages QR 코드" />
+      <code style="display: block; font-size: 11px; background: var(--surface-sub); border: 1px solid var(--line-strong); padding: 6px; margin-bottom: 12px; word-break: break-all; font-family: var(--mono);">
         https://woody-korean.github.io/dsc-hwp-ai-pipeline/
       </code>
-      <button id="closeQrBtn" class="btn btn-primary" style="width: 100%;">닫기</button>
+      <button id="closeQrBtn" type="button" class="btn btn-primary" style="width: 100%;">닫기</button>
     </div>
   </div>
 

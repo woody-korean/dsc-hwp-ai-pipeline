@@ -112,13 +112,13 @@
       btn.className = `corpus-card ${activeCase && activeCase.id === c.id ? "active" : ""}`;
       btn.innerHTML = `
         <div class="meta-top">
-          <span class="pill ${isHwp ? "hwp" : "hwpx"}">${isHwp ? ".HWP (OLE2)" : ".HWPX (XML)"}</span>
-          <span class="pill">${esc(c.badge)}</span>
+          <span class="tag-mono">${isHwp ? "HWP 5.0" : "HWPX"}</span>
+          <span class="tag-muted">${esc(c.badge)}</span>
         </div>
         <h3>${esc(c.short_title)}</h3>
         <p>${esc(c.sme_role)}</p>
-        <div style="font-size: 11.5px; color: var(--primary); font-weight: 700;">
-          문단 ${c.parse_info.paragraph_count}개 · 표 ${c.parse_info.table_count}개 · ${(c.parse_info.file_size / 1024).toFixed(1)} KB
+        <div class="corpus-stats">
+          문단 ${c.parse_info.paragraph_count} · 표 ${c.parse_info.table_count} · ${(c.parse_info.file_size / 1024).toFixed(1)} KB
         </div>
       `;
       btn.addEventListener("click", () => {
@@ -141,7 +141,7 @@
       dl.href = c.download_path;
       dl.download = p.filename;
       dl.className = "btn btn-sm";
-      dl.textContent = `⬇️ 원본 ${p.filename} 받기`;
+      dl.textContent = `원본 파일 받기 (${p.filename})`;
       actions.appendChild(dl);
     }
     if (c.source_url) {
@@ -150,23 +150,25 @@
       src.target = "_blank";
       src.rel = "noopener";
       src.className = "btn btn-sm";
-      src.textContent = "🔗 방위사업청 원문 페이지";
+      src.textContent = "방위사업청 원문 페이지";
       actions.appendChild(src);
     }
 
-    el("parseKvGrid").innerHTML = [
-      ["파일명", p.filename],
-      ["포맷 엔진", p.format_type],
-      ["매직 바이트", `0x${p.magic_hex}`],
-      ["내부 버전", p.hwp_version || "-"],
-      ["추출 문단 / 표", `${p.paragraph_count}문단 / ${p.table_count}표`],
-      ["추출 문자 수", `${num(p.char_count)}자`],
-    ]
-      .map(
-        ([k, v]) =>
-          `<div class="kv-box"><div class="kv-label">${esc(k)}</div><div class="kv-val">${esc(v)}</div></div>`
-      )
-      .join("");
+    el("parseKvGrid").innerHTML = `
+      <table class="meta-table">
+        <tbody>
+          <tr>
+            <th>파일명</th><td>${esc(p.filename)}</td>
+            <th>포맷 엔진</th><td>${esc(p.format_type)}</td>
+            <th>매직 바이트</th><td class="mono">0x${esc(p.magic_hex)}</td>
+          </tr>
+          <tr>
+            <th>내부 버전</th><td class="mono">${esc(p.hwp_version || "-")}</td>
+            <th>구조 추출</th><td>${p.paragraph_count}문단 / ${p.table_count}표</td>
+            <th>추출 문자 수</th><td class="num-inline">${num(p.char_count)}자</td>
+          </tr>
+        </tbody>
+      </table>`;
 
     el("rawExtractedBox").textContent = p.extracted_text || "(추출 텍스트 없음)";
   }
@@ -176,25 +178,23 @@
     el("llmMetaBadge").textContent = c.is_live_upload
       ? c.used_live_llm
         ? "브라우저 실시간 BAZE LLM 변환"
-        : "브라우저 HWP 파서 + 스마트 구조화"
+        : "브라우저 HWP 파서 + 규칙 기반 구조화"
       : "BAZE API Gateway (gpt-6.1-terra) 추출 완료";
 
-    el("summaryKvGrid").innerHTML = [
-      ["발주·공고기관", s.issuing_agency],
-      ["공고·문서번호", s.notice_number],
-      ["사업 분류", s.project_category],
-      ["예산 · 선정규모", s.budget_or_scale],
-    ]
-      .map(
-        ([k, v]) =>
-          `<div class="kv-box"><div class="kv-label">${esc(k)}</div><div class="kv-val">${esc(v)}</div></div>`
-      )
-      .join("");
+    el("summaryKvGrid").innerHTML = `
+      <table class="meta-table">
+        <tbody>
+          <tr><th>발주 · 공고기관</th><td>${esc(s.issuing_agency)}</td></tr>
+          <tr><th>공고 · 문서번호</th><td class="mono">${esc(s.notice_number)}</td></tr>
+          <tr><th>사업 분류</th><td>${esc(s.project_category)}</td></tr>
+          <tr><th>예산 · 선정규모</th><td><strong>${esc(s.budget_or_scale)}</strong></td></tr>
+        </tbody>
+      </table>`;
 
     el("eligibilityText").textContent = s.eligibility_summary || "";
     const listItems = [
-      ...(s.key_schedules || []).map((x) => `<li><strong>[일정]</strong> ${esc(x)}</li>`),
-      ...(s.mandatory_attachments || []).map((x) => `<li><strong>[필수서류]</strong> ${esc(x)}</li>`),
+      ...(s.key_schedules || []).map((x) => `<li><span class="list-key">일정</span> ${esc(x)}</li>`),
+      ...(s.mandatory_attachments || []).map((x) => `<li><span class="list-key">필수</span> ${esc(x)}</li>`),
     ];
     el("scheduleAttachList").innerHTML = listItems.join("");
 
@@ -202,24 +202,38 @@
       .map(
         (a) => `
         <div class="alert-item ${a.level === "high" ? "high" : ""}">
-          <strong>[${a.level === "high" ? "중요 경고" : "확인 권장"}] ${esc(a.title)}</strong>
-          <span>${esc(a.detail)}</span>
+          <div class="alert-head">[${a.level === "high" ? "중요 경고" : "확인 권장"}] ${esc(a.title)}</div>
+          <div class="alert-body">${esc(a.detail)}</div>
         </div>`
       )
       .join("");
   }
 
   function renderCrossCheck(c) {
-    el("crossCheckGrid").innerHTML = (c.cross_check.checks || [])
-      .map((chk) => {
-        const cls = chk.status === "FAIL" ? "fail" : chk.status === "WARN" ? "warn" : "";
-        return `
-          <div class="check-card ${cls}">
-            <div><span class="check-status">[${esc(chk.status)}]</span><strong>${esc(chk.rule)}</strong></div>
-            <div style="margin-top: 3px;">${esc(chk.detail)}</div>
-          </div>`;
-      })
-      .join("");
+    const labelMap = { PASS: "적합", WARN: "주의", FAIL: "불일치" };
+    el("crossCheckGrid").innerHTML = `
+      <table class="check-table">
+        <thead>
+          <tr>
+            <th style="width: 34%;">3-Way 교차검증 규칙</th>
+            <th style="width: 10%; text-align: center;">판정</th>
+            <th>세부 검증 근거</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(c.cross_check.checks || [])
+            .map((chk) => {
+              const cls = chk.status === "FAIL" ? "fail" : chk.status === "WARN" ? "warn" : "pass";
+              return `
+                <tr class="${cls}">
+                  <td><strong>${esc(chk.rule)}</strong></td>
+                  <td class="center"><span class="status-tag ${cls}">${labelMap[chk.status] || esc(chk.status)}</span></td>
+                  <td>${esc(chk.detail)}</td>
+                </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>`;
   }
 
   function renderSheet(c) {
@@ -381,7 +395,7 @@
             ${di.items
               .map(
                 (it, idx) => `
-              <tr style="${it.result !== "적합" ? "background: #fee2e2; font-weight:700;" : ""}">
+              <tr class="${it.result !== "적합" ? "row-fail" : ""}">
                 <td class="center">${idx + 1}</td>
                 <td>${esc(it.name)}</td>
                 <td>${esc(it.spec)}</td>
@@ -429,7 +443,7 @@
           </tr>
           <tr>
             <th>자동 첨부 서류</th>
-            <td colspan="3">${(ap.attachments || []).map((a) => `☑ ${esc(a)}`).join(" &nbsp; ")}</td>
+            <td colspan="3">${(ap.attachments || []).map((a, idx) => `${idx + 1}. ${esc(a)}`).join(" &nbsp;&nbsp;|&nbsp;&nbsp; ")}</td>
           </tr>
         </table>
       `;
@@ -478,8 +492,8 @@
 
   async function handleUploadedFile(file) {
     const status = el("uploadStatus");
-    status.style.color = "var(--primary)";
-    status.textContent = `⏳ "${file.name}" 바이너리/XML 구조 파싱 중...`;
+    status.className = "status-line";
+    status.textContent = `[파싱 중] "${file.name}" 바이너리·XML 구조 분석 중...`;
     try {
       const parsed = await window.HwpBrowserParser.parseHwpFile(file);
       let structured = null;
@@ -487,7 +501,7 @@
       const key = el("liveApiKey").value.trim();
 
       if (key) {
-        status.textContent = `🤖 파싱 완료(${parsed.char_count}자). BAZE LLM(${BAZE_MODEL}) 호출 중...`;
+        status.textContent = `[LLM 호출] 파싱 완료(${num(parsed.char_count)}자). BAZE LLM(${BAZE_MODEL}) 구조화 중...`;
         try {
           structured = await tryCallLiveBaze(parsed, key);
           if (structured && structured.doc_chain && structured.doc_chain.quotation) {
@@ -517,10 +531,11 @@
       };
       recalcCaseTotals(activeCase);
       renderAll();
-      status.textContent = `✅ 파싱 및 4종 서식 생성 완료! (${parsed.format_type}, ${parsed.paragraph_count}문단, ${parsed.table_count}표)`;
+      status.className = "status-line pass";
+      status.textContent = `[완료] 파싱 및 4종 서식 생성 완료 (${parsed.format_type}, ${parsed.paragraph_count}문단, ${parsed.table_count}표)`;
     } catch (err) {
-      status.style.color = "var(--fail)";
-      status.textContent = `❌ 오류: ${err.message}`;
+      status.className = "status-line fail";
+      status.textContent = `[오류] ${err.message}`;
     }
   }
 
@@ -557,18 +572,27 @@
     const timeSavedPct = (((manualHours - hybridHours) / manualHours) * 100).toFixed(1);
     const paybackMonths = netSavings > 0 ? (capex / netSavings).toFixed(1) : "∞";
 
-    el("simResultGrid").innerHTML = [
-      ["기대 추론 횟수 / 잔여 실패율(3회 재시도)", `${expectedRuns.toFixed(2)}회/건 · ${residualFailPct.toFixed(2)}%`],
-      ["기존 수작업 월 기회비용", `${manualHours.toFixed(1)}시간 · ${won(manualCost)}`],
-      ["본 시스템 월 총비용 (GPU+전기+검수)", `${hybridHours.toFixed(1)}시간 · ${won(hybridTotalCost)}`],
-      ["월 순절감액 (Net ROI) · 시간 절감", `${won(netSavings)}/월 · ${timeSavedPct}%↓`],
-      ["하드웨어 투자 회수 기간 (Payback)", `${paybackMonths}개월 (초기 ${won(capex)})`],
-    ]
-      .map(
-        ([k, v]) =>
-          `<div class="kv-box"><div class="kv-label">${esc(k)}</div><div class="kv-val" style="color:var(--primary);">${esc(v)}</div></div>`
-      )
-      .join("");
+    el("simResultGrid").innerHTML = `
+      <table class="kpi-table">
+        <thead>
+          <tr>
+            <th>기대 추론 · 잔여 실패율</th>
+            <th>기존 수작업 월 기회비용</th>
+            <th>본 시스템 월 총비용</th>
+            <th>월 순절감액 · 시간 단축</th>
+            <th>하드웨어 회수 기간</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${expectedRuns.toFixed(2)}회/건 (잔여 ${residualFailPct.toFixed(2)}%)</td>
+            <td>${manualHours.toFixed(1)}시간 / ${won(manualCost)}</td>
+            <td>${hybridHours.toFixed(1)}시간 / ${won(hybridTotalCost)}</td>
+            <td><strong>${won(netSavings)}/월 (${timeSavedPct}%↓)</strong></td>
+            <td><strong>${paybackMonths}개월</strong> (초기 ${won(capex)})</td>
+          </tr>
+        </tbody>
+      </table>`;
 
     el("simCompareTable").innerHTML = `
       <table class="doc-table">
