@@ -141,6 +141,50 @@
 
       <div class="card">
         <div class="card-header">
+          <div class="step-badge"><span class="step-num">DIFF</span> 기존 사내 DB(ERP) · 일반 사내 RAG LLM 대비 차별성 및 상호보완 아키텍처</div>
+          <span class="header-tag">맞춤형 AI 도구 보유 SME 5.7% (대한상의 2026.06)</span>
+        </div>
+        <div class="callout-note">
+          <strong>현실 통계 및 역할 차이:</strong> 대한상공회의소(2026.06) 조사상 사내 맞춤형 AI 도구(사내 LLM·RAG 등)를 제공하는 중소기업은 <strong>5.7%</strong>(대기업 11.4%)에 불과하며, 한국직능연(2026.05) 분석상 100인 미만 AI 활용률은 <strong>6.2%</strong>(제조업 5.7%, 대전 9.0%)입니다. 설령 사내 DB·RAG가 있더라도 <strong>사내 RAG는 '과거 문서 Q&amp;A 검색'</strong>, <strong>본 시스템은 '외부 신규 HWP 해독 → 산술 검증 → 4종 서식 생성 및 DB 적재'</strong>를 담당하는 상호보완 실행 엔진입니다.
+        </div>
+        <table class="meta-table">
+          <thead>
+            <tr>
+              <th style="width: 17%;">비교 항목</th>
+              <th style="width: 26%;">기존 사내 DB · ERP (저장소)</th>
+              <th style="width: 27%;">일반 사내 RAG LLM (검색 챗봇)</th>
+              <th style="width: 30%;">본 하이브리드 파이프라인 (실행 엔진)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>핵심 목적</strong></td>
+              <td>이미 입력된 거래·재고·회계 데이터 저장(System of Record)</td>
+              <td>사내 과거 문서(PDF/매뉴얼) 자연어 질의응답(System of Knowledge)</td>
+              <td><strong>외부 신규 .hwp/.hwpx 해독 → 4종 서식 생성·3-Way 검증(System of Action)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>외부 HWP/표 처리</strong></td>
+              <td>불가 — 사람이 공고를 읽고 4번 수기 입력</td>
+              <td>취약 — .hwp(OLE2) 바이너리·병합 표 벡터 청킹 시 표 구조 붕괴</td>
+              <td><strong>무손실 네이티브 파싱</strong> (struct·zlib·OWPML로 문단·표 100% 복원)</td>
+            </tr>
+            <tr>
+              <td><strong>추출 · 산술 검증</strong></td>
+              <td>SQL 조회 중심 (견적↔발주↔검수 오기입 선제 차단 불가)</td>
+              <td>Top-K 부분 검색 누락 + 확률적 토큰 생성으로 단가·VAT 계산 환각 위험</td>
+              <td><strong>문서 전수 JSON 추출 + 3회 재시도 + 결정론적 3-Way 검증 (산술 오류 0%)</strong></td>
+            </tr>
+            <tr>
+              <td><strong>상호 결합(Synergy)</strong></td>
+              <td colspan="3">외부 .hwp 공고 → <strong>[본 파서 무손실 해독]</strong> → 기존 사내 RAG/DB에서 과거 단가·재고·보안규정 조회 → <strong>[3-Way 검증 &amp; 4종 A4 생성]</strong> → 검증된 JSON을 <strong>기존 사내 DB/RAG에 자동 적재</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
           <div class="step-badge"><span class="step-num">ROI</span> 사내 컴퓨팅 자원(CapEx·전력) 및 실패·재시도 기회비용 시뮬레이터</div>
           <span class="header-tag">시나리오 추정 계산기</span>
         </div>

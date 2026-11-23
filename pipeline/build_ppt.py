@@ -601,9 +601,9 @@ def build_slide_2(prs: Presentation) -> None:
                 ("DISTEP (2019/2020)\n전자신문 (2026.10)", False, MUTED, PP_ALIGN.LEFT),
             ],
             [
-                ("국내 중소기업\nAI 도입 공백", True, CRIMSON, PP_ALIGN.LEFT),
-                ("AI 미적용 94.7% (적용 5.3%)\n장애: 맞춤형 응용서비스 부족 64.0%\n필요: 맞춤형 성공사례 66.3% / 세제 84%", True, BODY, PP_ALIGN.LEFT),
-                ("중소기업중앙회\n(2024.11, n=300)", False, MUTED, PP_ALIGN.LEFT),
+                ("국내 중소기업\nAI · 사내LLM 공백", True, CRIMSON, PP_ALIGN.LEFT),
+                ("AI 미적용 94.7% · 사내 맞춤형 AI 도구 보유 SME 5.7%(대기업 11.4%)\n100인 미만 AI 활용 6.2% · 제조업 5.7% · 대전 9.0%(300인+ 18.0%)\n장애: 맞춤형 서비스 부족 64.0% · 성공사례 66.3%", True, BODY, PP_ALIGN.LEFT),
+                ("중기중앙회(2024.11, n=300)\n대한상의(2026.06, n≈3,000)\n직능연(2026.05, 2024 패널)", False, MUTED, PP_ALIGN.LEFT),
             ],
             [
                 ("반복 행정에\n소비되는 시간", True, INK, PP_ALIGN.LEFT),
@@ -611,7 +611,7 @@ def build_slide_2(prs: Presentation) -> None:
                 ("Dropbox×YouGov\n(2025.07, 전체 직장인 n≈600)", False, MUTED, PP_ALIGN.LEFT),
             ],
         ],
-        font_pt=8.8,
+        font_pt=8.5,
         highlight_rows=[3],
         highlight_fill=CRIMSON_TINT,
         pad_lr=0.06,
@@ -915,36 +915,36 @@ def build_slide_4(prs: Presentation) -> None:
             space_after_pt=6.0,
         )
 
-    # Bottom Comparison Strip
+    # Bottom Comparison Strip (Internal DB vs Internal RAG LLM vs This Pipeline)
     add_monochrome_table(
         slide,
         0.55,
-        5.88,
+        5.84,
         12.23,
-        0.96,
-        col_widths=[2.65, 4.79, 4.79],
-        headers=["설계 방식 비교", "일반 프롬프트 단독 LLM (파일 통째 업로드)", "본 디커플링 하이브리드 파이프라인 (충남대 B팀)"],
+        1.02,
+        col_widths=[1.45, 3.10, 3.58, 4.10],
+        headers=["비교 기준", "기존 사내 DB · ERP (저장)", "일반 사내 RAG LLM (검색 챗봇)", "본 하이브리드 파이프라인 (실행 엔진)"],
         rows=[
             [
-                ("정확도 · 호환성 · 보안", True, INK, PP_ALIGN.LEFT),
-                (".hwp 바이너리 해독 불가 / 단가·세액 산술 환각 빈발 / 기밀 유출 우려", False, CRIMSON, PP_ALIGN.LEFT),
-                ("HWP·HWPX 100% 코드 파싱 / 산술·3-Way 오류 0% / 폐쇄망 sLLM 호환", True, NAVY, PP_ALIGN.LEFT),
+                ("역할 및\n핵심 차이", True, INK, PP_ALIGN.LEFT),
+                ("정형 데이터 저장소(System of Record)\n외부 .hwp 해독 불가 → 사람이 4번 수기 입력", False, MUTED, PP_ALIGN.LEFT),
+                ("과거 문서 Top-K Q&A(System of Knowledge)\n.hwp 표 붕괴 · 산술 환각 · 4종 서식 생성 불가", False, CRIMSON, PP_ALIGN.LEFT),
+                ("외부 .hwp 무손실 파싱 + 사내 DB·RAG 단가 연동\n3-Way 산술검증(오류 0%) + 4종 서식·DB 적재", True, NAVY, PP_ALIGN.LEFT),
             ]
         ],
-        font_pt=9.0,
-        pad_lr=0.08,
+        font_pt=8.4,
+        pad_lr=0.07,
         pad_tb=0.03,
     )
 
     set_speaker_notes(
         slide,
-        "[2:15 - 3:15] 해결 아키텍처\n"
+        "[2:15 - 3:15] 해결 아키텍처 (사내 DB · 일반 RAG와의 차이 포함)\n"
         "저희 아키텍처의 가장 큰 차별점은 결정론적 코드와 생성형 AI의 역할을 엄격히 분리(Decoupling)한 것입니다.\n"
-        "많은 AI 데모가 LLM에게 파일 통째로 넣고 계산까지 맡기다 보니 할루시네이션으로 합계가 틀립니다. 저희는 1단계에서 자체 구현한 Python 및 "
-        "브라우저 자바스크립트 파서가 별도 한컴 프로그램 없이 .hwp 바이너리 스트림(OLE2/zlib)과 .hwpx XML 표를 토큰 소모 0으로 완벽히 분해합니다.\n"
-        "2단계에서만 BAZE API의 gpt-6.1-terra 또는 사내 로컬 sLLM을 호출해 핵심 조건과 리스크를 JSON으로 뽑고, 파싱이 어긋나면 에러 원인을 되돌려 "
-        "최대 3회 자동 재시도합니다. 그리고 3단계에서 normalize_and_crosscheck 코드가 수량×단가와 부가세 10%, 견적·발주·검수 간 3-Way 일치를 "
-        "수학적으로 100% 강제 검증한 뒤, 4단계로 4종 A4 서식을 동시 생성합니다.",
+        "흔히 사내 DB나 사내 RAG LLM이 있으면 필요 없는 것 아니냐고 생각하실 수 있지만, 사내 DB는 사람이 입력한 후 저장만 하고, "
+        "일반 RAG 챗봇은 과거 사내 문서를 부분 검색해 답변만 해줄 뿐 방금 온 .hwp 공고의 표를 깨짐 없이 읽고 4종 서식과 부가세 10%를 맞춰 DB에 넣어주지 못합니다.\n"
+        "저희는 1단계 순수 코드 파서가 .hwp/.hwpx 표를 토큰 0으로 분해하고, 2단계에서만 BAZE 또는 사내 sLLM으로 JSON을 뽑아 최대 3회 재시도하며, "
+        "3단계 normalize_and_crosscheck가 산술·3-Way 일치를 100% 검증한 뒤 4종 A4 서식과 사내 DB 적재용 JSON을 동시 생성합니다.",
     )
 
 
@@ -1379,15 +1379,15 @@ def build_slide_8(prs: Presentation) -> None:
                 ("방위사업청 303문단·8표(.hwpx) 및 54문단(.hwp 5.0) 실물 테스트 완료 (*스캔 이미지 PDF/HWP는 OCR 전처리 연계 가능)", False, BODY, PP_ALIGN.LEFT),
             ],
             [
-                ("범용 API · 폐쇄망 호환", True, INK, PP_ALIGN.LEFT),
-                ("OpenAI 호환 규격으로 BAZE(gpt-6.1-terra) 실측 및 사내 Ollama/vLLM(--base-url) 즉시 전환 구조 검증", False, BODY, PP_ALIGN.LEFT),
+                ("사내 DB · RAG와의\n차별성 및 시너지", True, INK, PP_ALIGN.LEFT),
+                ("사내 DB(저장)·RAG(검색 Q&A)가 못 하는 '외부 HWP 무손실 파싱 → 3-Way 산술검증 → 4종 서식 생성'을 전담하며 사내 DB·RAG 앞·뒷단과 연동 (SME 맞춤형 도구 보유율 5.7%)", False, BODY, PP_ALIGN.LEFT),
             ],
             [
                 ("지역 현장 확산 전략", True, NAVY, PP_ALIGN.LEFT),
-                ("오픈소스 무료 배포 + 기업별 사내 견적·품의 서식 1회 커스터마이징 및 폐쇄망 GPU 워크스테이션 패키지화", False, BODY, PP_ALIGN.LEFT),
+                ("오픈소스 무료 배포 + 기업별 사내 견적·품의 서식 1회 커스터마이징 및 폐쇄망 Ollama/vLLM 워크스테이션 패키지화", False, BODY, PP_ALIGN.LEFT),
             ],
         ],
-        font_pt=8.7,
+        font_pt=8.4,
         row_fills=[WHITE, SURFACE_SUB, WHITE],
         pad_lr=0.08,
         pad_tb=0.04,
@@ -1433,7 +1433,8 @@ def build_slide_8(prs: Presentation) -> None:
         "정리하겠습니다. 저희 충남대 B팀이 구현한 솔루션은\n"
         "첫째, 대한민국 고유 포맷인 .hwp·.hwpx를 라이선스 비용 없이 완벽히 파싱하고,\n"
         "둘째, 폐쇄망 Local sLLM과 코드 기반 3-Way 검증을 결합해 정보유출과 실패 기회비용을 동시에 봉쇄했으며,\n"
-        "셋째, 대덕특구와 산단 기술 인력들이 매달 수십 시간의 복붙 행정에서 벗어나 본업인 연구개발과 수주에 집중할 수 있게 만듭니다.\n"
+        "셋째, 기존 사내 DB나 RAG 챗봇을 도입한 소수 기업(SME 중 맞춤형 도구 5.7%)에서도 앞단 파싱·뒷단 서식 트랜잭션을 책임져 "
+        "대덕특구와 산단 기술 인력들이 본업인 연구개발과 수주에 집중할 수 있게 만듭니다.\n"
         "화면의 QR과 GitHub에서 방위사업청 실물 테스트와 코드 전체를 확인하실 수 있습니다. 이상 발표를 마치겠습니다. 감사합니다.",
     )
 
