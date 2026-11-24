@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-23T13:14:23.002591+00:00",
+  "generated_at": "2026-11-24T07:28:02.682938+00:00",
   "pipeline": {
     "parser": "Pure-Python HWP 5.0 (OLE2/CFB + zlib + HWPTAG_PARA_TEXT) & HWPX (KS X 6101 OWPML ZIP+XML)",
     "llm_gateway": "Mindlogic BAZE API Gateway",
@@ -1062,6 +1062,251 @@
             "rule": "공급가액·부가세(10%)·품의총액 산식 검증",
             "status": "PASS",
             "detail": "공급가액 15,000,000원 + VAT 1,500,000원 = 16,500,000원 일치"
+          },
+          {
+            "rule": "납기·검수 일정 정합성 검증",
+            "status": "PASS",
+            "detail": "발주납기 2026-12-20 / 검수일 2026-12-18"
+          },
+          {
+            "rule": "공고 요구 필수 서류·품의 첨부 체크",
+            "status": "PASS",
+            "detail": "필수 첨부 3건 바인딩 완료"
+          }
+        ]
+      }
+    },
+    {
+      "id": "kriss_gpu_workstation_spec",
+      "short_title": "KRISS GPU 워크스테이션 구매규격서",
+      "badge": "대전 출연연 (KRISS)",
+      "sme_role": "대덕연구단지 출연연(한국표준과학연구원) 연구장비 납품",
+      "source_url": "https://www.kriss.re.kr/board.es?mid=a10506000000&bid=0005&list_no=63917&act=view",
+      "download_path": "samples/kriss_gpu_workstation_spec.hwp",
+      "parse_info": {
+        "filename": "kriss_gpu_workstation_spec.hwp",
+        "format_type": "HWP 5.0 Binary (OLE2/CFB)",
+        "magic_hex": "d0cf11e0a1b11ae1",
+        "hwp_version": "5.1.0.1",
+        "file_size": 63488,
+        "section_count": 1,
+        "table_count": 1,
+        "paragraph_count": 39,
+        "char_count": 940,
+        "streams_preview": [
+          "\u0005HwpSummaryInformation",
+          "DefaultJScript",
+          "DocInfo",
+          "FileHeader",
+          "JScriptVersion",
+          "PrvImage",
+          "PrvText",
+          "Section0",
+          "_LinkDoc"
+        ],
+        "extracted_text": "구 매 규 격 서\nCommodity Description\n품목번호\nItem No.\n정부물품분류번호(8자리)\nKorea Government Commodity classification code(eight-digit)\n품 명\nDescription\n단위\nUnit\n수량\nQ'ty\n1\n43211501\nGPU 워크스테이션\nset\n1\nⅠ. 용도(End-user's Use)\n1. 중적외선 분광센서 데이터의 고속 FFT 기반 스펙트럼 분석\n2. 플라즈마 활성종 및 분광 스펙트럼의 시뮬레이션·검증을 위한 양자화학 계산\nⅡ. 장비의 구성(Configurations of Goods)\n1. 주장비\no GPU 워크스테이션 1 SET\nⅢ. Performance & Specification\n1. GPU 워크스테이션\no CPU: AMD Ryzen Threadripper 9970X 급 이상\no 메인보드: TRX50-SAGE WiFi 급 이상\no GPU: NVIDIA RTX PRO 5000 Blackwell 48 GB * 2개\no RAM: 삼성전자 ECC RDIMM DDR5-5600 MHz (= PC4-44800), 32 GB * 4개\no SSD: 삼성전자 M.2 NVME 4TB * 2개\no Power: 1300 W 이상\no Cooler: CPU 쿨러 및 케이스 쿨러\no Case: 빅타워형\nIV. 기타 조건(Remarks)\no 납품기한: 2026.11.20. 이내\no 보증기간은 검수 및 납품일로부터 1년으로 한다.\no 제안에 포함된 물품은 제조사 정품이어야 하며, 리퍼비시, 중고, 워런티 서비스용 부품을 제안해서는 안 된다.\no 위 규격과 동등 또는 그 이상의 사양이어야 하며, 수요부서에서 요청 시 동등 성능 이상에 대한 증빙 자료를 제출할 수 있어야 한다.\no 납품 후 하자보증기간 중 발생한 제품의 고장 또는 성능 이상이 발생할 경우, 계약자는 신속하게 무상으로 수리 및 교환하여야 한다.",
+        "tables": []
+      },
+      "source_summary": {
+        "document_title": "구 매 규 격 서 (Commodity Description)",
+        "issuing_agency": "한국표준과학연구원(KRISS, 사용자 제공 수행 맥락 기준; 규격서 원문 미기재)",
+        "notice_number": "원문 미기재",
+        "project_category": "연구장비 구매·납품",
+        "budget_or_scale": "GPU 워크스테이션 1 SET",
+        "key_schedules": [
+          "납품기한: 2026.11.20. 이내",
+          "보증기간: 검수 및 납품일로부터 1년",
+          "하자보증기간 중 고장 또는 성능 이상 발생 시 신속하게 무상 수리 및 교환"
+        ],
+        "eligibility_summary": "참가자격은 원문 미기재. 제안 물품은 제조사 정품이어야 하며 리퍼비시, 중고, 워런티 서비스용 부품은 제안할 수 없다.",
+        "mandatory_attachments": [
+          "수요부서 요청 시 동등 성능 이상에 대한 증빙자료 제출",
+          "하자보증기간 중 고장 또는 성능 이상 발생 시 신속한 무상 수리 및 교환"
+        ],
+        "risk_alerts": [
+          {
+            "level": "high",
+            "title": "원문 납품기한 경과",
+            "detail": "납품기한은 2026.11.20. 이내로, 아래 예시 견적일과 발주일보다 앞선다. 예시 문서는 실제 기한 준수 건으로 사용할 수 없으며 진행 가능 여부와 변경된 기한을 발주 측에 확인해야 한다."
+          },
+          {
+            "level": "high",
+            "title": "정품 및 동등 이상 규격 확인",
+            "detail": "제조사 정품만 제안할 수 있고 리퍼비시, 중고, 워런티 서비스용 부품은 금지된다. 모든 규격은 원문과 동등 이상이어야 하며 수요부서 요청 시 증빙자료를 제출해야 한다."
+          },
+          {
+            "level": "medium",
+            "title": "메모리 규격 표기 확인",
+            "detail": "원문에는 'DDR5-5600 MHz (= PC4-44800)'라고 표기되어 있다. DDR5와 PC4 표기가 혼재하므로 발주 측에 정확한 요구 규격을 확인해야 한다."
+          },
+          {
+            "level": "medium",
+            "title": "보증 및 무상 조치",
+            "detail": "검수 및 납품일로부터 1년간 보증하며, 하자보증기간 중 고장 또는 성능 이상 발생 시 신속하게 무상 수리 및 교환해야 한다."
+          }
+        ]
+      },
+      "doc_chain": {
+        "quotation": {
+          "doc_no": "Q-2026-0001",
+          "quote_date": "2026-11-23",
+          "recipient": "한국표준과학연구원 수요부서(담당부서 확인 필요)",
+          "supplier": "(주)대덕정밀기계 (대전 대덕구 문평동 / 대표 김대전)",
+          "project_name": "GPU 워크스테이션 1 SET 납품 견적",
+          "valid_until": "견적일로부터 30일",
+          "items": [
+            {
+              "name": "워크스테이션 기본 플랫폼",
+              "spec": "AMD Ryzen Threadripper 9970X 급 이상 CPU, TRX50-SAGE WiFi 급 이상 메인보드, 1300 W 이상 전원, CPU·케이스 쿨러 및 빅타워 케이스",
+              "unit": "SET",
+              "qty": 1,
+              "unit_price": 9000000,
+              "supply_amount": 9000000
+            },
+            {
+              "name": "GPU 구성품",
+              "spec": "NVIDIA RTX PRO 5000 Blackwell 48 GB 2개 구성",
+              "unit": "SET",
+              "qty": 1,
+              "unit_price": 24000000,
+              "supply_amount": 24000000
+            },
+            {
+              "name": "메모리 구성품",
+              "spec": "삼성전자 ECC RDIMM DDR5-5600 MHz 32 GB 4개 구성; 원문상 PC4-44800 표기는 확인 필요",
+              "unit": "SET",
+              "qty": 1,
+              "unit_price": 2000000,
+              "supply_amount": 2000000
+            },
+            {
+              "name": "SSD 구성품",
+              "spec": "삼성전자 M.2 NVME 4TB 2개 구성",
+              "unit": "SET",
+              "qty": 1,
+              "unit_price": 2000000,
+              "supply_amount": 2000000
+            }
+          ],
+          "notes": "품목은 GPU 워크스테이션 1 SET의 내부 구성품을 분리한 예시이며 금액은 실제 견적이 아닌 가정이다. 원문 납품기한은 2026.11.20. 이내로 견적일 이전이므로 발주 측의 기한 확인 없이 제출할 수 없다. 대금지급 조건은 원문 미기재로 협의가 필요하다. 정품 및 동등 이상 규격, 요청 시 성능 증빙과 검수·납품일부터 1년 보증을 반영한다.",
+          "total_supply": 37000000,
+          "vat": 3700000,
+          "grand_total": 40700000
+        },
+        "purchase_order": {
+          "doc_no": "PO-2026-0001",
+          "order_date": "2026-11-24",
+          "due_date": "2026-12-20",
+          "linked_notice_no": "원문 미기재",
+          "vendor_or_dept": "생산기술팀 / 협력가공업체",
+          "items": [
+            {
+              "name": "워크스테이션 기본 플랫폼",
+              "spec_material": "Threadripper 9970X 급 이상 CPU, TRX50-SAGE WiFi 급 이상 메인보드, 1300 W 이상 전원, 쿨러 및 빅타워 케이스",
+              "qty": 1,
+              "assignee": "생산기술팀",
+              "qc_standard": "원문 규격 동등 이상 및 제조사 정품 여부 확인"
+            },
+            {
+              "name": "GPU 구성품",
+              "spec_material": "NVIDIA RTX PRO 5000 Blackwell 48 GB 2개",
+              "qty": 1,
+              "assignee": "생산기술팀",
+              "qc_standard": "모델·용량·수량 및 제조사 정품 여부 확인"
+            },
+            {
+              "name": "메모리 구성품",
+              "spec_material": "삼성전자 ECC RDIMM DDR5-5600 MHz 32 GB 4개; PC4-44800 표기 발주 측 확인 필요",
+              "qty": 1,
+              "assignee": "생산기술팀",
+              "qc_standard": "확인된 메모리 규격·용량·수량 및 제조사 정품 여부 확인"
+            },
+            {
+              "name": "SSD 구성품",
+              "spec_material": "삼성전자 M.2 NVME 4TB 2개",
+              "qty": 1,
+              "assignee": "생산기술팀",
+              "qc_standard": "모델·용량·수량 및 제조사 정품 여부 확인"
+            }
+          ],
+          "instructions": "내부 작업지시 예시이며 실제 발주가 아니다. 예시 납기 2026.12.20.은 원문 납품기한 2026.11.20.을 초과하므로 적용 전 발주 측의 기한 변경 여부를 확인한다. 구성품 호환성과 동등 성능 증빙 가능 여부를 확인한다."
+        },
+        "delivery_inspection": {
+          "doc_no": "DI-2026-0001",
+          "delivery_date": "2026-12-18",
+          "delivery_location": "원문 미기재; 발주 측 확인 필요",
+          "inspector_org": "한국표준과학연구원 수요부서(검수 담당 확인 필요)",
+          "items": [
+            {
+              "name": "워크스테이션 기본 플랫폼",
+              "spec": "Threadripper 9970X 급 이상 CPU, TRX50-SAGE WiFi 급 이상 메인보드, 1300 W 이상 전원, 쿨러 및 빅타워 케이스",
+              "ordered_qty": 1,
+              "delivered_qty": 1,
+              "passed_qty": 1,
+              "result": "적합"
+            },
+            {
+              "name": "GPU 구성품",
+              "spec": "NVIDIA RTX PRO 5000 Blackwell 48 GB 2개 구성",
+              "ordered_qty": 1,
+              "delivered_qty": 1,
+              "passed_qty": 1,
+              "result": "적합"
+            },
+            {
+              "name": "메모리 구성품",
+              "spec": "삼성전자 ECC RDIMM DDR5-5600 MHz 32 GB 4개 구성; 상세 표기 확인 필요",
+              "ordered_qty": 1,
+              "delivered_qty": 1,
+              "passed_qty": 1,
+              "result": "적합"
+            },
+            {
+              "name": "SSD 구성품",
+              "spec": "삼성전자 M.2 NVME 4TB 2개 구성",
+              "ordered_qty": 1,
+              "delivered_qty": 1,
+              "passed_qty": 1,
+              "result": "적합"
+            }
+          ],
+          "inspector_note": "모든 납품 수량과 적합 결과는 문서 양식 작성용 가정이며 실제 납품·검수 사실이 아니다. 예시 납품일은 원문 기한을 초과한다. 실제 납품 시 구성품 정품 여부, 규격 및 기능을 확인하고 검수 결과를 별도로 기록해야 한다."
+        },
+        "expense_approval": {
+          "doc_no": "AP-2026-0001",
+          "draft_date": "2026-11-24",
+          "department": "기술영업·생산관리팀",
+          "drafter": "대리 이행정",
+          "approval_line": [
+            "담당",
+            "기술연구소장",
+            "대표이사"
+          ],
+          "title": "GPU 워크스테이션 납품 검토 및 지출 품의 예시",
+          "purpose_and_effect": "중적외선 분광센서 데이터의 고속 FFT 기반 스펙트럼 분석과 양자화학 계산을 위한 워크스테이션 납품을 검토한다. 요구 규격과 정품 여부를 확인해 연구장비 공급 대응력을 높인다.",
+          "account_subject": "연구장비 구성품 구입비",
+          "attachments": [
+            "표준 견적서 예시",
+            "발주·작업지시서 예시",
+            "구매 규격서 및 동등 성능 증빙자료(수요부서 요청 시)"
+          ],
+          "total_supply": 37000000,
+          "vat": 3700000,
+          "grand_total": 40700000
+        }
+      },
+      "cross_check": {
+        "overall_status": "PASS",
+        "checks": [
+          {
+            "rule": "품목 수·수량 3-Way 일치 (견적 ↔ 발주 ↔ 납품검수)",
+            "status": "PASS",
+            "detail": "4개 품목 수량 100% 일치"
+          },
+          {
+            "rule": "공급가액·부가세(10%)·품의총액 산식 검증",
+            "status": "PASS",
+            "detail": "공급가액 37,000,000원 + VAT 3,700,000원 = 40,700,000원 일치"
           },
           {
             "rule": "납기·검수 일정 정합성 검증",

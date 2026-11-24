@@ -52,10 +52,17 @@ DOC_META = {
         "sme_role": "대전·충청 방산혁신기업 기술협력·시제품 외주발주 자동화",
         "source_url": "https://www.dapa.go.kr/dapa/doc/selectDocList.do?menuSeq=3031&bbsSeq=443&ctgrySeq=186",
     },
+    "kriss_gpu_workstation_spec.hwp": {
+        "id": "kriss_gpu_workstation_spec",
+        "short_title": "KRISS GPU 워크스테이션 구매규격서",
+        "badge": "대전 출연연 (KRISS)",
+        "sme_role": "대덕연구단지 출연연(한국표준과학연구원) 연구장비 납품",
+        "source_url": "https://www.kriss.re.kr/board.es?mid=a10506000000&bid=0005&list_no=63917&act=view",
+    },
 }
 
 SYSTEM_PROMPT = """당신은 대한민국 대전 대덕산업단지·대덕특구 배후에서 정밀기계 부품 및 연구·방산 장비를 납품하는 B2B 중소기업 '(주)대덕정밀기계'(직원 18명)의 AI 행정 자동화 비서입니다.
-사용자가 제공하는 원문은 방위사업청(DAPA) 등 실제 공공·국방 기관의 HWP/HWPX 문서에서 파싱한 텍스트입니다.
+사용자가 제공하는 원문은 방위사업청(DAPA)·정부출연연구기관(한국표준과학연구원 KRISS 등) 실제 공공·연구기관의 HWP/HWPX 문서에서 파싱한 텍스트입니다.
 반드시 원문에 등장하는 기관명, 공고번호, 사업명, 일정, 예산, 필수 제출서류, 품목/기술 키워드를 정확히 근거로 삼아 아래 JSON 스키마에 맞춰 완벽한 한국어 JSON만 출력하세요.
 
 출력 JSON 스키마 (반드시 키 이름을 정확히 유지):
@@ -311,8 +318,8 @@ def verify_existing_json() -> int:
         return 1
     data = json.loads(OUT_JSON.read_text(encoding="utf-8"))
     cases = data.get("cases", [])
-    if len(cases) < 4:
-        print(f"Expected 4 cases, found {len(cases)}", file=sys.stderr)
+    if len(cases) < len(DOC_META):
+        print(f"Expected at least {len(DOC_META)} cases, found {len(cases)}", file=sys.stderr)
         return 1
     for c in cases:
         chain = c.get("doc_chain", {})
@@ -351,6 +358,11 @@ def main() -> int:
         default=3,
         help="Max JSON schema auto-retry attempts per document (default: 3).",
     )
+    parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help="Keep existing precomputed cases and call LLM only for newly added documents.",
+    )
     args = parser.parse_args()
 
     if args.verify_only:
@@ -375,6 +387,15 @@ def main() -> int:
     DOCS_SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
 
+    existing_by_id: dict[str, dict[str, Any]] = {}
+    if args.only_missing and OUT_JSON.exists():
+        try:
+            old_bundle = json.loads(OUT_JSON.read_text(encoding="utf-8"))
+            for item in old_bundle.get("cases", []):
+                existing_by_id[item["id"]] = item
+        except Exception:
+            existing_by_id = {}
+
     cases: list[dict[str, Any]] = []
     for fname, meta in DOC_META.items():
         src_path = SAMPLES_DIR / fname
@@ -384,6 +405,11 @@ def main() -> int:
 
         # Copy raw sample into docs/samples/ for live download from GitHub Pages
         shutil.copy2(src_path, DOCS_SAMPLES_DIR / fname)
+
+        if args.only_missing and meta["id"] in existing_by_id:
+            cases.append(existing_by_id[meta["id"]])
+            print(f"Reusing existing precomputed case for {meta['id']} ({fname})")
+            continue
 
         parsed = parse_hwp_any(src_path)
         print(

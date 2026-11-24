@@ -245,7 +245,7 @@ a:hover {
 
 .corpus-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -826,8 +826,167 @@ tr.row-fail td {
   display: block;
 }
 
-@media (max-width: 960px) {
+/* Company Profile Bar */
+.profile-panel {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--ink);
+  padding: 12px 18px;
+  margin-bottom: 16px;
+}
+
+.profile-summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 700;
+  list-style: none;
+}
+
+.profile-summary::-webkit-details-marker {
+  display: none;
+}
+
+.profile-preview {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.profile-field label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+.profile-field input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface-sub);
+}
+
+.profile-field input:focus {
+  outline: none;
+  border-color: var(--ink);
+  background: var(--surface);
+}
+
+/* Template Export Bar inside Step 03 */
+.template-bar {
+  margin-top: 16px;
+  background: var(--surface-sub);
+  border: 1px solid var(--line-strong);
+  padding: 12px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.template-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Step 04: Change Request Diff & Auto Reply */
+.scenario-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.change-textarea {
+  width: 100%;
+  min-height: 82px;
+  padding: 10px 12px;
+  border: 1px solid #9ca3af;
+  border-radius: 2px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: var(--surface-sub);
+  resize: vertical;
+}
+
+.change-textarea:focus {
+  outline: none;
+  border-color: var(--ink);
+  background: var(--surface);
+}
+
+.change-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 16px;
+}
+
+.diff-table tr.changed td {
+  background: #eff6ff;
+}
+
+.diff-table tr.deficit td {
+  background: var(--fail-bg);
+}
+
+.diff-delta {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.diff-table tr.deficit .diff-delta {
+  color: var(--fail);
+}
+
+.reply-box {
+  background: var(--surface-sub);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--navy);
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink-body);
+  max-height: 310px;
+  overflow-y: auto;
+}
+
+@media (max-width: 1040px) {
   .corpus-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .profile-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .grid-2 {
@@ -842,7 +1001,8 @@ tr.row-fail td {
   .masthead {
     flex-direction: column;
   }
-  .corpus-grid {
+  .corpus-grid,
+  .profile-grid {
     grid-template-columns: 1fr;
   }
   .a4-sheet {
@@ -862,11 +1022,13 @@ tr.row-fail td {
   #corpusSection,
   #uploadSection,
   #securitySection,
-  .card:not(:last-child),
+  .profile-panel,
+  #pipelineWorkspace > .card:not(#step3Card),
   .card-header,
   .sot-bar,
   .check-table,
-  .doc-toolbar {
+  .doc-toolbar,
+  .template-bar {
     display: none !important;
   }
   .card {

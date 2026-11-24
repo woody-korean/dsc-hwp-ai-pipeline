@@ -427,8 +427,171 @@
     };
   }
 
+  function xmlEscape(val) {
+    return String(val ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  function collectElementText(el) {
+    const parts = [];
+    for (const node of el.getElementsByTagName("*")) {
+      if (localName(node) === "t") {
+        parts.push(node.textContent || "");
+      }
+    }
+    return parts.join("").replace(/\s+/g, " ").trim();
+  }
+
+  function setFirstCellText(tcEl, value) {
+    for (const node of tcEl.getElementsByTagName("*")) {
+      if (localName(node) === "t") {
+        node.textContent = value;
+        return true;
+      }
+    }
+    for (const node of tcEl.getElementsByTagName("*")) {
+      if (localName(node) === "run") {
+        const ns = node.namespaceURI || "http://www.hancom.co.kr/hwpml/2011/paragraph";
+        const tEl = tcEl.ownerDocument.createElementNS(ns, "hp:t");
+        tEl.textContent = value;
+        node.appendChild(tEl);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Fills {{PLACEHOLDER}} tokens AND smartly populates blank adjacent table cells
+   * in an HWPX (KS X 6101) archive without leaving the browser.
+   */
+  async function fillHwpxTemplate(arrayBuffer, placeholderMap, labelValueMap) {
+    if (!global.JSZip) {
+      throw new Error("JSZip 라이브러리가 로드되지 않았습니다.");
+    }
+    const uint8 = new Uint8Array(arrayBuffer);
+    if (!toHex(uint8, 4).startsWith("504b0304")) {
+      throw new Error("지정 양식 채우기는 .hwpx(OWPML XML) 포맷만 지원합니다.");
+    }
+
+    const inZip = await global.JSZip.loadAsync(uint8);
+    const outZip = new global.JSZip();
+    const filledFields = [];
+
+    const rules = [
+      [/^(상호|법인명|업체명|공급자|회사명)/, "COMPANY_NAME"],
+      [/^(사업자등록번호|사업자번호)/, "BIZ_NO"],
+      [/^(대표자|대표이사|성명)/, "CEO_NAME"],
+      [/^(주소|소재지|본사주소|공장주소)/, "COMPANY_ADDR"],
+      [/^(담당자)/, "CONTACT_NAME"],
+      [/^(연락처|전화|휴대전화)/, "CONTACT_PHONE"],
+      [/^(보유인증|인증)/, "CERTIFICATIONS"],
+      [/^(계좌|입금계좌)/, "BANK_ACCOUNT"],
+      [/^(발주기관|공고기관|수신처)/, "ISSUING_AGENCY"],
+      [/^(공고번호|관리번호)/, "NOTICE_NO"],
+      [/^(건명|사업명|품의제목|용역명)/, "PROJECT_NAME"],
+      [/^(납기|납품기한|계약기한)/, "DUE_DATE"],
+      [/^(합계금액|총합계금액|총액|견적금액|품의요청총액)/, "GRAND_TOTAL"],
+      [/^(공급가액)/, "TOTAL_SUPPLY"],
+      [/^(부가세|부가가치세|세액)/, "VAT_AMOUNT"],
+    ];
+
+    const names = Object.keys(inZip.files);
+    const sortedNames = [
+      ...names.filter((n) => n === "mimetype"),
+      ...names.filter((n) => n !== "mimetype"),
+    ];
+
+    const domParser = new DOMParser();
+    const serializer = new XMLSerializer();
+
+    for (const entryName of sortedNames) {
+      const zipEntry = inZip.files[entryName];
+      if (zipEntry.dir) continue;
+
+      if (/^Contents\/section\d+\.xml$/i.test(entryName)) {
+        let xmlStr = await zipEntry.async("string");
+        let placeholderHits = 0;
+
+        for (const [k, v] of Object.entries(placeholderMap || {})) {
+          const token = `{{${k}}}`;
+          if (xmlStr.includes(token)) {
+            xmlStr = xmlStr.split(token).join(xmlEscape(v));
+            placeholderHits += 1;
+            filledFields.push(k);
+          }
+        }
+
+        // Fallback smart label -> blank adjacent cell fill for arbitrary external HWPX templates
+        if (labelValueMap && Object.keys(labelValueMap).length > 0) {
+          const doc = domParser.parseFromString(xmlStr, "application/xml");
+          const hasParseErr = doc.getElementsByTagName("parsererror").length > 0;
+          if (!hasParseErr) {
+            let domChanged = false;
+            const trEls = Array.from(doc.getElementsByTagName("*")).filter(
+              (el) => localName(el) === "tr"
+            );
+            for (const tr of trEls) {
+              const cells = Array.from(tr.children).filter((c) => localName(c) === "tc");
+              for (let i = 0; i < cells.length - 1; i += 1) {
+                const labelTxt = collectElementText(cells[i]).replace(/[\s:：()（）]/g, "");
+                const nextTxt = collectElementText(cells[i + 1]);
+                if (!labelTxt) continue;
+                const isNextBlank =
+                  nextTxt === "" || nextTxt === "-" || nextTxt === "()" || /^\(?\s*\)?$/.test(nextTxt);
+                if (!isNextBlank) continue;
+                for (const [rePattern, mapKey] of rules) {
+                  if (rePattern.test(labelTxt) && labelValueMap[mapKey]) {
+                    if (setFirstCellText(cells[i + 1], String(labelValueMap[mapKey]))) {
+                      domChanged = true;
+                      filledFields.push(`${labelTxt}->${mapKey}`);
+                    }
+                    break;
+                  }
+                }
+              }
+            }
+            if (domChanged) {
+              xmlStr = serializer.serializeToString(doc);
+            }
+          }
+        }
+
+        outZip.file(entryName, xmlStr, { compression: "DEFLATE" });
+      } else if (entryName === "Preview/PrvText.txt") {
+        let txt = await zipEntry.async("string");
+        for (const [k, v] of Object.entries(placeholderMap || {})) {
+          txt = txt.split(`{{${k}}}`).join(String(v ?? ""));
+        }
+        outZip.file(entryName, txt, { compression: "DEFLATE" });
+      } else if (entryName === "mimetype") {
+        const buf = await zipEntry.async("uint8array");
+        outZip.file(entryName, buf, { compression: "STORE" });
+      } else {
+        const buf = await zipEntry.async("uint8array");
+        outZip.file(entryName, buf, { compression: "DEFLATE" });
+      }
+    }
+
+    const blob = await outZip.generateAsync({
+      type: "blob",
+      mimeType: "application/hwp+zip",
+    });
+
+    return {
+      blob,
+      filledCount: filledFields.length,
+      filledFields: Array.from(new Set(filledFields)),
+    };
+  }
+
   global.HwpBrowserParser = {
     parseHwpFile,
     buildFallbackChainFromParsed,
+    fillHwpxTemplate,
   };
 })(window);

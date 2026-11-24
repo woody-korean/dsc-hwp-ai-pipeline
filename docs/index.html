@@ -16,13 +16,13 @@
     <header class="masthead">
       <div class="masthead-left">
         <div class="masthead-kicker">
-          2026 DSC 공유대학 AI 실전 프로젝트 챌린지 · 과제 4 (중소기업 반복 행정업무 개선) · 충남대 B팀 (신수하 외 1인)
+          2026 DSC 공유대학 AI 실전 프로젝트 챌린지 · 과제 4 (중소기업 반복 행정업무 개선) · 충남대 B팀 (신수하 · 김우형)
         </div>
-        <h1>국방·공공 HWP·HWPX 기반 중소기업 4종 행정서식 자동화 시스템</h1>
+        <h1>국방·공공·출연연 HWP·HWPX 기반 중소기업 4종 행정서식 자동화 시스템</h1>
         <p class="masthead-sub">
-          대전 대덕산단·대덕특구 배후 B2B 정밀제조·방산 중소기업(<strong>(주)대덕정밀기계</strong> 페르소나)이
-          <strong>방위사업청 실제 공고(.hwp / .hwpx)</strong> 1회 파싱으로
-          <strong>견적서 · 발주·작업지시서 · 납품검수조서 · 지출결의서</strong>를 일괄 생성 및 교차검증합니다.
+          대전 대덕산단·대덕특구 배후 B2B 정밀제조·방산·연구장비 중소기업(<strong>(주)대덕정밀기계</strong>)이
+          <strong>방위사업청 · 한국표준과학연구원(KRISS) 실물 공고(.hwp / .hwpx) 5종</strong>을 1회 파싱해
+          <strong>기업 프로필 기반 지정양식(.hwpx) 자동 채우기 · 4종 서식 생성 · 사후 변경요청 Diff·회신</strong>을 일괄 처리합니다.
         </p>
       </div>
       <div class="masthead-right">
@@ -41,15 +41,15 @@
 
     <!-- Primary Mode Tabs -->
     <nav class="mode-tabs" aria-label="시연 모드 전환">
-      <button type="button" class="mode-tab active" data-mode="corpus">1. 방위사업청 실물 HWP/HWPX 변환 시연</button>
+      <button type="button" class="mode-tab active" data-mode="corpus">1. 공공 · 출연연 실물 HWP/HWPX 변환 시연</button>
       <button type="button" class="mode-tab" data-mode="upload">2. 직접 HWP/HWPX 파일 업로드</button>
       <button type="button" class="mode-tab" data-mode="security">3. 폐쇄망 Local sLLM 및 기회비용 시뮬레이터</button>
     </nav>
 
-    <!-- Mode 1: Real DAPA Corpus -->
+    <!-- Mode 1: Real DAPA + KRISS Corpus -->
     <section id="corpusSection" class="selector-panel">
       <div class="selector-head">
-        <span><strong>시연 문서 선택</strong> — 방위사업청(dapa.go.kr)에서 직접 수집한 실물 한글 문서 4종 (BAZE <code class="mono">gpt-6.1-terra</code> 실측 변환본 탑재)</span>
+        <span><strong>시연 문서 선택</strong> — 방위사업청(DAPA) · 대전 한국표준과학연구원(KRISS) 실물 문서 5종 (BAZE <code class="mono">gpt-6.1-terra</code> 실측 변환본)</span>
         <span>문단 · 표 · 금액 산식 검증 완료</span>
       </div>
       <div id="corpusGrid" class="corpus-grid"></div>
@@ -207,8 +207,56 @@
       </div>
     </section>
 
-    <!-- Main 3-Step Pipeline Workspace -->
+    <!-- Main 4-Step Pipeline Workspace -->
     <main id="pipelineWorkspace">
+      <!-- Reusable Registered Company Profile (1-Time Entry) -->
+      <section class="profile-panel">
+        <details id="companyProfileToggle">
+          <summary class="profile-summary">
+            <span>사내 기업정보 1회 등록 (4종 서식 · 지정 HWPX · ERP CSV · 회신 서명 자동 연동)</span>
+            <span id="profileSummaryPreview" class="profile-preview">(주)대덕정밀기계 · 314-81-59204 · 대표 김대전 · 클릭해 편집</span>
+          </summary>
+          <div class="profile-grid">
+            <div class="profile-field">
+              <label for="profName">상호(법인명)</label>
+              <input id="profName" type="text" value="(주)대덕정밀기계" />
+            </div>
+            <div class="profile-field">
+              <label for="profBizNo">사업자등록번호</label>
+              <input id="profBizNo" type="text" value="314-81-59204" />
+            </div>
+            <div class="profile-field">
+              <label for="profCeo">대표자명</label>
+              <input id="profCeo" type="text" value="김대전" />
+            </div>
+            <div class="profile-field">
+              <label for="profContact">담당자 / 직급</label>
+              <input id="profContact" type="text" value="이행정 대리" />
+            </div>
+            <div class="profile-field">
+              <label for="profAddr">본사 · 공장 주소</label>
+              <input id="profAddr" type="text" value="대전 대덕구 문평서로 18번길 (대덕산업단지)" />
+            </div>
+            <div class="profile-field">
+              <label for="profPhone">연락처 / 이메일</label>
+              <input id="profPhone" type="text" value="042-930-4100 / sales@dd-precision.kr" />
+            </div>
+            <div class="profile-field">
+              <label for="profCerts">보유 인증 · 등록</label>
+              <input id="profCerts" type="text" value="벤처기업 · 이노비즈 · 직접생산확인" />
+            </div>
+            <div class="profile-field">
+              <label for="profBank">입금 계좌 (세금계산서 연동)</label>
+              <input id="profBank" type="text" value="기업은행 314-092811-01-012" />
+            </div>
+          </div>
+          <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted);">
+            <span>입력 내용은 브라우저(localStorage)에 자동 저장되어 공고가 바뀌어도 반복 입력할 필요가 없습니다.</span>
+            <button id="resetProfileBtn" type="button" class="btn btn-sm">기본값 복원</button>
+          </div>
+        </details>
+      </section>
+
       <!-- Step 1 -->
       <section class="card">
         <div class="card-header">
@@ -248,7 +296,7 @@
       </section>
 
       <!-- Step 3 -->
-      <section class="card">
+      <section id="step3Card" class="card">
         <div class="card-header">
           <div class="step-badge"><span class="step-num">03</span> 단일 원천 기반 4종 행정서식 자동생성 및 3-Way 교차검증</div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -277,6 +325,68 @@
         </div>
 
         <div id="a4SheetContainer" class="a4-sheet"></div>
+
+        <!-- Template Autofill & ERP Export Bar -->
+        <div class="template-bar">
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: var(--ink);">
+              기관 · 사내 지정 양식(.hwpx) 자동 채우기 및 ERP 내보내기
+            </div>
+            <div id="templateStatusLine" style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+              등록된 기업정보와 현재 4종 서식 값을 기관 지정 .hwpx 양식 또는 ERP 업로드용 CSV 파일로 즉시 내려받습니다.
+            </div>
+          </div>
+          <div class="template-actions">
+            <button id="downloadFilledHwpxBtn" type="button" class="btn btn-primary btn-sm">기관 지정 양식(.hwpx) 자동 채우기 · 다운로드</button>
+            <button id="uploadCustomTemplateBtn" type="button" class="btn btn-sm">내 .hwpx 양식 올려 자동 채우기</button>
+            <input id="customTemplateInput" type="file" accept=".hwpx" class="hidden" />
+            <button id="downloadErpCsvBtn" type="button" class="btn btn-sm">ERP 일괄등록용 CSV 저장</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 4: Post-Creation Change Request Diff + Auto-Sync + Reply -->
+      <section id="changeRequestCard" class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">04</span> 사후 변경요청(메일 · 전화 메모) 비교(Diff) · 일괄 수정 · 회신 초안 생성</div>
+          <span id="revisionBadge" class="header-tag">현재 문서 버전: Rev.1 (최초 기안)</span>
+        </div>
+
+        <div class="scenario-bar">
+          <button type="button" class="btn btn-sm scenario-btn" data-scenario="qty_due">시나리오 1: 1번 품목 수량 100→120개 변경 &amp; 납기 7일 연장</button>
+          <button type="button" class="btn btn-sm scenario-btn" data-scenario="price_discount">시나리오 2: 1번 품목 수량 +2개 증량 &amp; 단가 5% 협의 조정</button>
+          <button type="button" class="btn btn-sm scenario-btn" data-scenario="short_delivery">시나리오 3: 납품 현장 1번 품목 1개 부족 통보 (검수 보류)</button>
+        </div>
+
+        <label for="changeRequestInput" style="display: block; font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 5px;">
+          거래처 이메일 · 전화 통화 변경요청 원문 입력 (BAZE Key 입력 시 실시간 AI 파싱, 미입력 시 내장 한국어 파서 동작):
+        </label>
+        <textarea id="changeRequestInput" class="change-textarea" placeholder="예: 김과장님, 발주 건 1번 품목 수량을 100개에서 120개로 늘려주시고, 납기는 일주일 연장된 2026-12-27까지 맞춰주세요. 견적서랑 검수 일정 수정해서 메일 회신 부탁드립니다."></textarea>
+
+        <div class="change-controls">
+          <button id="analyzeChangeBtn" type="button" class="btn btn-primary btn-sm">변경요청 분석 및 Diff 비교</button>
+          <button id="applyChangeBtn" type="button" class="btn btn-sm" disabled>4종 서식(Rev.2)에 일괄 반영</button>
+          <button id="revertRevBtn" type="button" class="btn btn-sm" disabled>원본(Rev.1)으로 되돌리기</button>
+          <span id="changeStatusLine" style="font-size: 12px; color: var(--muted);"></span>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <div class="subhead-row">변경 전(Before) vs 변경 후(After) 비교표 (Diff)</div>
+            <div id="changeDiffBox">
+              <div class="text-block" style="color: var(--muted);">
+                위 시나리오 버튼을 누르거나 거래처 변경 메일 내용을 입력한 뒤 <strong>[변경요청 분석 및 Diff 비교]</strong>를 실행하면, 수량·단가·부가세·총액·납기 변화량이 즉시 계산됩니다.
+              </div>
+            </div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 10px;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--ink);">거래처 회신 이메일 · 문자 초안</span>
+              <button id="copyReplyBtn" type="button" class="btn btn-sm" disabled>회신 초안 복사</button>
+            </div>
+            <div id="replyDraftBox" class="reply-box" style="color: var(--muted);">변경요청 분석 후 거래처에 바로 발송할 수 있는 공식 회신 문구(변경 내역·조정 금액·납기 확인·서명 포함)가 자동 생성됩니다.</div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
