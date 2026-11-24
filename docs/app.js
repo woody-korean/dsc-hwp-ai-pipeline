@@ -949,21 +949,26 @@
       changeTags.push(`단가 ${num(newPrice)}원 조정`);
     }
 
-    // 3. Due date change ("2026-12-27" or "7일 연장" or "일주일 연장")
-    const dateMatch = text.match(/(20\d{2})[-./](\d{1,2})[-./](\d{1,2})/);
+    // 3. Due date change ("7일 연장" / "일주일 연장" or explicit new target date)
     const daysMatch = text.match(/(\d+)\s*일\s*(연장|연기|순연|단축|앞당)/);
     const weekMatch = text.match(/(일주일|1주|한\s*주)\s*(연장|연기|순연)/);
-    if (dateMatch) {
-      newDue = `${dateMatch[1]}-${dateMatch[2].padStart(2, "0")}-${dateMatch[3].padStart(2, "0")}`;
-      changeTags.push(`납기 ${newDue}`);
-    } else if (daysMatch) {
+    const allDates = Array.from(text.matchAll(/(20\d{2})[-./](\d{1,2})[-./](\d{1,2})/g)).map(
+      (m) => `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`
+    );
+    const explicitNewDate = allDates.find((d) => d !== oldDue);
+    if (daysMatch) {
       const nDays = parseInt(daysMatch[1], 10) || 0;
       const sign = /단축|앞당/.test(daysMatch[2]) ? -1 : 1;
-      newDue = shiftIsoDate(oldDue, sign * nDays);
+      const baseRef = allDates[0] || oldDue;
+      newDue = shiftIsoDate(baseRef, sign * nDays);
       changeTags.push(`납기 ${sign > 0 ? `+${nDays}` : `-${nDays}`}일(${newDue})`);
     } else if (weekMatch) {
-      newDue = shiftIsoDate(oldDue, 7);
+      const baseRef = allDates[0] || oldDue;
+      newDue = shiftIsoDate(baseRef, 7);
       changeTags.push(`납기 +7일(${newDue})`);
+    } else if (explicitNewDate) {
+      newDue = explicitNewDate;
+      changeTags.push(`납기 ${newDue}`);
     }
 
     // 4. Delivery shortage ("1개 부족", "검수 보류")
