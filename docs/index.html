@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>충남대 B팀 | HWP·LLM 기반 대전 중소기업 행정서식 자동화 시연</title>
-  <link rel="stylesheet" href="styles.css?v=20261124b" />
+  <link rel="stylesheet" href="styles.css?v=20261124c" />
   <!-- Browser-side pure JS HWP 5.0 (CFB+zlib) & HWPX (ZIP+XML) libraries -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/cfb@1.2.2/cfb.min.js"></script>
@@ -209,11 +209,11 @@
 
     <!-- Main 4-Step Pipeline Workspace -->
     <main id="pipelineWorkspace">
-      <!-- Reusable Registered Company Profile (1-Time Entry) -->
+      <!-- Reusable Registered Company Knowledge Base (1-Time Entry) -->
       <section class="profile-panel">
         <details id="companyProfileToggle">
           <summary class="profile-summary">
-            <span>사내 기업정보 1회 등록 (4종 서식 · 지정 HWPX · ERP CSV · 회신 서명 자동 연동)</span>
+            <span>사내 기업자료 · 인력 · 실적 DB 1회 등록 (4종 기본서식 · 임의 기관양식 .hwpx · ERP CSV · 회신 서명 자동 연동)</span>
             <span id="profileSummaryPreview" class="profile-preview">(주)대덕정밀기계 · 314-81-59204 · 대표 김대전 · 클릭해 편집</span>
           </summary>
           <div class="profile-grid">
@@ -250,8 +250,35 @@
               <input id="profBank" type="text" value="기업은행 314-092811-01-012" />
             </div>
           </div>
+
+          <div class="profile-divider">
+            기관 제출양식(업체 일반현황 · 참여인력 현황표 · 사업수행계획서) 자동 채우기용 기업 역량 DB
+          </div>
+          <div class="profile-extended-grid">
+            <div class="profile-field">
+              <label for="profEstRev">설립일 · 최근 연매출 · 상시인원</label>
+              <input id="profEstRev" type="text" value="2016.04.15 설립 · 연매출 42억 원 · 상시 18명 (연구전담 6명)" />
+            </div>
+            <div class="profile-field">
+              <label for="profCapability">보유 장비 · 품질보증 · 수행 방법론 요약</label>
+              <input id="profCapability" type="text" value="5축 CNC 머시닝센터 4대 · 3차원 좌표측정기(CMM) · DQMS/ISO9001 전수검수 체계" />
+            </div>
+            <div class="profile-field">
+              <label for="profStaff">핵심 참여인력 현황 (줄바꿈 구분: 성명 | 직급 | 담당역할 | 경력·학위)</label>
+              <textarea id="profStaff">이준호 | 수석연구원 | 총괄책임자(PM) | 기계공학 박사 · 방산/출연연 납품 12년
+박서연 | 책임연구원 | 시스템·SW/검증 | 컴퓨터공학 석사 · GPU/임베디드 8년
+최민규 | 품질팀장 | 품질보증(QA)·검수 | 국방품질경영시스템(DQMS) · 정밀측정 10년</textarea>
+            </div>
+            <div class="profile-field">
+              <label for="profTrackRecord">최근 3년 주요 수행실적 (줄바꿈 구분: 발주기관 | 사업명 | 수행기간 | 계약금액)</label>
+              <textarea id="profTrackRecord">국방과학연구소(ADD) | UAV 구동부 정밀 하우징 시제품 | 2025.03 ~ 2025.11 | 8,400만 원
+한국항공우주연구원 | 위성시험용 광학 마운트 제작 | 2024.06 ~ 2025.02 | 6,200만 원
+한국표준과학연구원 | 고집적 GPU 서버 랙 냉각 모듈 납품 | 2024.02 ~ 2024.09 | 4,900만 원</textarea>
+            </div>
+          </div>
+
           <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--muted);">
-            <span>입력 내용은 브라우저(localStorage)에 자동 저장되어 공고가 바뀌어도 반복 입력할 필요가 없습니다.</span>
+            <span>입력 내용은 브라우저(localStorage)에 자동 저장되어 공고나 제출 양식이 바뀌어도 반복 입력할 필요가 없습니다.</span>
             <button id="resetProfileBtn" type="button" class="btn btn-sm">기본값 복원</button>
           </div>
         </details>
@@ -316,58 +343,84 @@
 
         <div class="doc-toolbar">
           <div class="doc-tabs">
-            <button type="button" class="doc-tab active" data-doc="quotation">1. 표준 견적서</button>
-            <button type="button" class="doc-tab" data-doc="purchase_order">2. 발주서 · 작업지시서</button>
-            <button type="button" class="doc-tab" data-doc="delivery_inspection">3. 거래명세서 · 납품검수조서</button>
-            <button type="button" class="doc-tab" data-doc="expense_approval">4. 지출결의서 · 내부 품의서</button>
+            <button type="button" class="doc-tab active" data-doc="quotation">1. 표준 견적서 <span class="rev-pill" id="tabRev_quotation">Rev.1</span></button>
+            <button type="button" class="doc-tab" data-doc="purchase_order">2. 발주서 · 작업지시서 <span class="rev-pill" id="tabRev_purchase_order">Rev.1</span></button>
+            <button type="button" class="doc-tab" data-doc="delivery_inspection">3. 거래명세서 · 납품검수조서 <span class="rev-pill" id="tabRev_delivery_inspection">Rev.1</span></button>
+            <button type="button" class="doc-tab" data-doc="expense_approval">4. 지출결의서 · 내부 품의서 <span class="rev-pill" id="tabRev_expense_approval">Rev.1</span></button>
           </div>
           <button id="downloadJsonBtn" type="button" class="btn btn-sm" style="margin-bottom: 4px;">구조화 JSON 저장</button>
         </div>
 
         <div id="a4SheetContainer" class="a4-sheet"></div>
 
-        <!-- Template Autofill & ERP Export Bar -->
+        <!-- Schema-Agnostic Universal HWPX Form Workbench & ERP Export -->
         <div class="template-bar">
-          <div>
-            <div style="font-size: 13px; font-weight: 700; color: var(--ink);">
-              기관 · 사내 지정 양식(.hwpx) 자동 채우기 및 ERP 내보내기
-            </div>
-            <div id="templateStatusLine" style="font-size: 12px; color: var(--muted); margin-top: 2px;">
-              등록된 기업정보와 현재 4종 서식 값을 기관 지정 .hwpx 양식 또는 ERP 업로드용 CSV 파일로 즉시 내려받습니다.
+          <div class="template-bar-head">
+            <div>
+              <div style="font-size: 13px; font-weight: 700; color: var(--ink);">
+                임의 기관 지정 양식(.hwpx) AI 구조 분석 · 자동 작성 워크벤치 &amp; ERP 내보내기
+              </div>
+              <div id="templateStatusLine" style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+                기본 4종 서식에 한정하지 않고, 공고별 <strong>업체 일반현황·인력현황표·사업수행계획서</strong> 또는 <strong>사용자 업로드 임의 .hwpx 양식(빈 칸 구조)</strong>을 실시간 분석해 기업자료 DB에서 자동 작성합니다.
+              </div>
             </div>
           </div>
           <div class="template-actions">
-            <button id="downloadFilledHwpxBtn" type="button" class="btn btn-primary btn-sm">기관 지정 양식(.hwpx) 자동 채우기 · 다운로드</button>
-            <button id="uploadCustomTemplateBtn" type="button" class="btn btn-sm">내 .hwpx 양식 올려 자동 채우기</button>
+            <button id="presetFormQuoteBtn" type="button" class="btn btn-primary btn-sm">① 표준 견적·납품 양식 분석</button>
+            <button id="presetFormStaffBtn" type="button" class="btn btn-sm">② 업체 일반현황 · 인력현황표 분석 <span class="rev-pill" id="formRev_form_company_staff">Rev.1</span></button>
+            <button id="presetFormPlanBtn" type="button" class="btn btn-sm">③ 사업수행계획서 요약 분석 <span class="rev-pill" id="formRev_form_project_plan">Rev.1</span></button>
+            <button id="uploadCustomTemplateBtn" type="button" class="btn btn-sm">임의 .hwpx 양식 직접 업로드 분석</button>
             <input id="customTemplateInput" type="file" accept=".hwpx" class="hidden" />
             <button id="downloadErpCsvBtn" type="button" class="btn btn-sm">ERP 일괄등록용 CSV 저장</button>
+          </div>
+
+          <div id="formWorkbenchPreview" class="workbench-preview hidden">
+            <div class="workbench-head">
+              <div>
+                <div style="font-size: 13px; font-weight: 700; color: var(--ink);" id="workbenchMetaInfo">양식 분석 결과</div>
+                <div style="font-size: 11.5px; color: var(--muted);">아래 자동 매핑된 값을 검토·수정한 뒤 완성본 .hwpx 파일을 내려받으세요. (한컴 한글 즉시 열람 가능)</div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button id="downloadAnalyzedHwpxBtn" type="button" class="btn btn-primary btn-sm">완성된 .hwpx 내려받기</button>
+                <button id="closeWorkbenchBtn" type="button" class="btn btn-sm">닫기</button>
+              </div>
+            </div>
+            <div id="slotMapTableWrap" class="slot-map-wrap"></div>
           </div>
         </div>
       </section>
 
-      <!-- Step 4: Post-Creation Change Request Diff + Auto-Sync + Reply -->
+      <!-- Step 4: Post-Creation Change Request Impact Analysis + Selective Sync + Reply -->
       <section id="changeRequestCard" class="card">
         <div class="card-header">
-          <div class="step-badge"><span class="step-num">04</span> 사후 변경요청(메일 · 전화 메모) 비교(Diff) · 일괄 수정 · 회신 초안 생성</div>
-          <span id="revisionBadge" class="header-tag">현재 문서 버전: Rev.1 (최초 기안)</span>
+          <div class="step-badge"><span class="step-num">04</span> 사후 변경요청(메일 · 전화 메모) → 영향 서류 자동 판별(Impact Analysis) · 선별 개정 · 회신 생성</div>
+          <span id="revisionBadge" class="header-tag">관리 대상 6종 문서 · 전체 Rev.1 (최초 기안)</span>
         </div>
 
         <div class="scenario-bar">
-          <button type="button" class="btn btn-sm scenario-btn" data-scenario="qty_due">시나리오 1: 1번 품목 수량 100→120개 변경 &amp; 납기 7일 연장</button>
-          <button type="button" class="btn btn-sm scenario-btn" data-scenario="price_discount">시나리오 2: 1번 품목 수량 +2개 증량 &amp; 단가 5% 협의 조정</button>
-          <button type="button" class="btn btn-sm scenario-btn" data-scenario="short_delivery">시나리오 3: 납품 현장 1번 품목 1개 부족 통보 (검수 보류)</button>
+          <button type="button" class="btn btn-sm scenario-btn" data-scenario="qty_due">시나리오 1: 1번 품목 수량 100→120개 &amp; 납기 7일 연장 (5종 영향)</button>
+          <button type="button" class="btn btn-sm scenario-btn" data-scenario="due_location">시나리오 2: 납기 10일 연장 &amp; 납품장소 2연구동 변경 (3종만 영향)</button>
+          <button type="button" class="btn btn-sm scenario-btn" data-scenario="pm_change">시나리오 3: 총괄책임자(PM) 이준호→박서연 교체 (인력·계획서 2종만 영향)</button>
+          <button type="button" class="btn btn-sm scenario-btn" data-scenario="short_delivery">시나리오 4: 납품 현장 1개 부족 통보 (검수조서 1종만 영향)</button>
         </div>
 
         <label for="changeRequestInput" style="display: block; font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 5px;">
-          거래처 이메일 · 전화 통화 변경요청 원문 입력 (BAZE Key 입력 시 실시간 AI 파싱, 미입력 시 내장 한국어 파서 동작):
+          거래처 이메일 · 전화 통화 변경요청 원문 입력 (수량·단가·납기·납품장소·PM 교체·검수 부족을 감지해 관련 서류만 선별 수정):
         </label>
-        <textarea id="changeRequestInput" class="change-textarea" placeholder="예: 김과장님, 발주 건 1번 품목 수량을 100개에서 120개로 늘려주시고, 납기는 일주일 연장된 2026-12-27까지 맞춰주세요. 견적서랑 검수 일정 수정해서 메일 회신 부탁드립니다."></textarea>
+        <textarea id="changeRequestInput" class="change-textarea" placeholder="예: 김과장님, 발주 건 총괄책임자(PM)를 이준호에서 박서연으로 교체해 주세요. 견적 금액과 발주 수량은 변동 없습니다."></textarea>
 
         <div class="change-controls">
-          <button id="analyzeChangeBtn" type="button" class="btn btn-primary btn-sm">변경요청 분석 및 Diff 비교</button>
-          <button id="applyChangeBtn" type="button" class="btn btn-sm" disabled>4종 서식(Rev.2)에 일괄 반영</button>
-          <button id="revertRevBtn" type="button" class="btn btn-sm" disabled>원본(Rev.1)으로 되돌리기</button>
+          <button id="analyzeChangeBtn" type="button" class="btn btn-primary btn-sm">영향 서류 판별 및 Diff 비교</button>
+          <button id="applyChangeBtn" type="button" class="btn btn-sm" disabled>선택된 서류만 개정 반영</button>
+          <button id="revertRevBtn" type="button" class="btn btn-sm" disabled>전체 원본(Rev.1)으로 되돌리기</button>
           <span id="changeStatusLine" style="font-size: 12px; color: var(--muted);"></span>
+        </div>
+
+        <div class="subhead-row">영향 서류 자동 판별 매트릭스 (Impact Analysis — 관련 서류만 선별 수정)</div>
+        <div id="impactMatrixBox" class="impact-matrix">
+          <div class="text-block" style="color: var(--muted);">
+            위 시나리오 버튼을 누르거나 변경 요청을 입력한 뒤 <strong>[영향 서류 판별 및 Diff 비교]</strong>를 실행하면, 6종 서류(핵심 4종 + 기관양식 2종) 중 <strong>실제로 수정이 필요한 서류만 자동 체크</strong>되고 무관한 서류는 기존 버전(Rev.1)을 유지합니다.
+          </div>
         </div>
 
         <div class="grid-2">
@@ -375,7 +428,7 @@
             <div class="subhead-row">변경 전(Before) vs 변경 후(After) 비교표 (Diff)</div>
             <div id="changeDiffBox">
               <div class="text-block" style="color: var(--muted);">
-                위 시나리오 버튼을 누르거나 거래처 변경 메일 내용을 입력한 뒤 <strong>[변경요청 분석 및 Diff 비교]</strong>를 실행하면, 수량·단가·부가세·총액·납기 변화량이 즉시 계산됩니다.
+                변경 요청 분석 시 수량·단가·납기·납품장소·총괄책임자(PM)·총액 변동 내역이 대조 표시됩니다.
               </div>
             </div>
           </div>
@@ -384,7 +437,7 @@
               <span style="font-size: 13px; font-weight: 700; color: var(--ink);">거래처 회신 이메일 · 문자 초안</span>
               <button id="copyReplyBtn" type="button" class="btn btn-sm" disabled>회신 초안 복사</button>
             </div>
-            <div id="replyDraftBox" class="reply-box" style="color: var(--muted);">변경요청 분석 후 거래처에 바로 발송할 수 있는 공식 회신 문구(변경 내역·조정 금액·납기 확인·서명 포함)가 자동 생성됩니다.</div>
+            <div id="replyDraftBox" class="reply-box" style="color: var(--muted);">변경요청 분석 후 개정 서류(Rev.2) 및 원안 유지 서류(Rev.1)가 구분 명시된 공식 회신 문구가 자동 생성됩니다.</div>
           </div>
         </div>
       </section>
@@ -396,7 +449,7 @@
     <div class="modal-content">
       <h3 style="margin: 0 0 6px; font-size: 16px; color: var(--ink);">모바일 · 현장 시연 QR 접속</h3>
       <p style="margin: 0; font-size: 12.5px; color: var(--muted);">
-        스마트폰 카메라로 스캔하면 실제 방위사업청 HWP·HWPX 파싱과 4종 문서 자동화를 직접 확인할 수 있습니다.
+        스마트폰 카메라로 스캔하면 실제 방위사업청·KRISS HWP/HWPX 파싱과 임의 양식 자동 작성을 직접 확인할 수 있습니다.
       </p>
       <img src="qr.svg" alt="GitHub Pages QR 코드" />
       <code style="display: block; font-size: 11px; background: var(--surface-sub); border: 1px solid var(--line-strong); padding: 6px; margin-bottom: 12px; word-break: break-all; font-family: var(--mono);">
@@ -406,7 +459,7 @@
     </div>
   </div>
 
-  <script src="hwp_browser_parser.js?v=20261124b"></script>
-  <script src="app.js?v=20261124b"></script>
+  <script src="hwp_browser_parser.js?v=20261124c"></script>
+  <script src="app.js?v=20261124c"></script>
 </body>
 </html>

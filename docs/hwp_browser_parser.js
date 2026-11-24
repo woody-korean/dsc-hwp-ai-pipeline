@@ -447,11 +447,18 @@
   }
 
   function setFirstCellText(tcEl, value) {
+    const tNodes = [];
     for (const node of tcEl.getElementsByTagName("*")) {
       if (localName(node) === "t") {
-        node.textContent = value;
-        return true;
+        tNodes.push(node);
       }
+    }
+    if (tNodes.length > 0) {
+      tNodes[0].textContent = value;
+      for (let i = 1; i < tNodes.length; i += 1) {
+        tNodes[i].textContent = "";
+      }
+      return true;
     }
     for (const node of tcEl.getElementsByTagName("*")) {
       if (localName(node) === "run") {
@@ -465,40 +472,338 @@
     return false;
   }
 
+  const SEMANTIC_RULES = [
+    [/^(담당자.*연락처|연락처.*담당자)/, "CONTACT_COMBINED", "기업자료"],
+    [/^(설립|매출|상시인원|종업원)/, "EST_REV", "기업자료"],
+    [/^(상호|법인명|업체명|제출업체|공급자|회사명)/, "COMPANY_NAME", "기업자료"],
+    [/^(사업자.*번호)/, "BIZ_NO", "기업자료"],
+    [/^(대표자|대표이사|성명)/, "CEO_NAME", "기업자료"],
+    [/^(본사|공장|소재지|주소)|소재지$/, "COMPANY_ADDR", "기업자료"],
+    [/^(담당자)/, "CONTACT_NAME", "기업자료"],
+    [/^(연락처|전화|휴대전화)/, "CONTACT_PHONE", "기업자료"],
+    [/^(보유인증|인증)/, "CERTIFICATIONS", "기업자료"],
+    [/^(계좌|입금계좌)/, "BANK_ACCOUNT", "기업자료"],
+    [/^(총괄책임|연구책임|책임자|PM)/i, "PM_NAME", "기업자료"],
+    [/^(발주.*기관|공고기관|제출기관|수신처|발주처)/, "ISSUING_AGENCY", "공고·서식 연동"],
+    [/^(공고.*번호|관리번호|문서번호)/, "NOTICE_NO", "공고·서식 연동"],
+    [/^(사업.*명|과제명|건명|품의제목|용역명)/, "PROJECT_NAME", "공고·서식 연동"],
+    [/^(납기|납품.*기한|수행기한|계약기한|수행기간)/, "DUE_DATE", "공고·서식 연동"],
+    [/^(납품.*장소|납품처|설치장소|수행장소)/, "DELIVERY_LOCATION", "공고·서식 연동"],
+    [/^(제안총액|합계금액|총합계금액|총액|견적금액|품의요청총액)/, "GRAND_TOTAL", "공고·서식 연동"],
+    [/^(공급가액)/, "TOTAL_SUPPLY", "공고·서식 연동"],
+    [/^(부가세|부가가치세|세액)/, "VAT_AMOUNT", "공고·서식 연동"],
+    [/(사업이해|수행목표|추진배경|사업개요)/, "PLAN_GOAL", "AI 초안"],
+    [/(세부추진|핵심품목|과업내용|추진내용)/, "PLAN_SCOPE", "AI 초안"],
+    [/(추진일정|납품검수|일정계획|검수계획)/, "PLAN_SCHEDULE", "AI 초안"],
+    [/(보유장비|기술역량|품질보증|품질관리)/, "PLAN_QUALITY", "AI 초안"],
+    [/(유사.*실적|수행실적요약|주요실적)/, "PLAN_TRACK", "AI 초안"],
+  ];
+
+  const TOKEN_FRIENDLY_LABELS = {
+    DOC_NO: ["문서번호", "공고·서식 연동"],
+    REVISION_TAG: ["문서버전", "공고·서식 연동"],
+    DOC_DATE: ["작성일자", "공고·서식 연동"],
+    DUE_DATE: ["납품요청기한", "공고·서식 연동"],
+    COMPANY_NAME: ["상호(법인명)", "기업자료"],
+    BIZ_NO: ["사업자등록번호", "기업자료"],
+    CEO_NAME: ["대표자명", "기업자료"],
+    CONTACT_NAME: ["담당자", "기업자료"],
+    CONTACT_PHONE: ["연락처 / 이메일", "기업자료"],
+    COMPANY_ADDR: ["본사 · 공장 주소", "기업자료"],
+    CERTIFICATIONS: ["보유 인증", "기업자료"],
+    BANK_ACCOUNT: ["입금 계좌 정보", "기업자료"],
+    ISSUING_AGENCY: ["발주 · 공고기관", "공고·서식 연동"],
+    NOTICE_NO: ["공고 · 문서번호", "공고·서식 연동"],
+    GRAND_TOTAL: ["총 합계금액(VAT포함)", "공고·서식 연동"],
+    PROJECT_NAME: ["사업 · 건명", "공고·서식 연동"],
+    TOTAL_SUPPLY: ["공급가액", "공고·서식 연동"],
+    VAT_AMOUNT: ["부가가치세(10%)", "공고·서식 연동"],
+    CHANGE_NOTE: ["변경 이력 및 특기사항", "공고·서식 연동"],
+  };
+
+  function isBlankCellText(txt) {
+    return txt === "" || txt === "-" || txt === "()" || /^\(?\s*(기재|작성|공란)?\s*\)?$/.test(txt);
+  }
+
+  function normalizeLabelForMatch(raw) {
+    return String(raw || "")
+      .replace(/^\s*\d+\.\s*/, "")
+      .replace(/[\s:：()（）\[\]·.,/\\-]/g, "");
+  }
+
+  function matchSemanticRule(rawLabel) {
+    const cleaned = normalizeLabelForMatch(rawLabel);
+    if (!cleaned) return null;
+    for (const [pattern, key, source] of SEMANTIC_RULES) {
+      if (pattern.test(cleaned)) return { key, source };
+    }
+    return null;
+  }
+
+  function detectRepeatingTableKind(headerTexts) {
+    const joined = headerTexts.join(" ");
+    if (!joined.trim()) return null;
+    if (/(성명|이름|참여인력)/.test(joined) && /(직급|역할|경력|학위|구분)/.test(joined)) {
+      return "staff";
+    }
+    if (/(발주기관|발주처)/.test(joined) && /(사업명|용역|과제명|수행기간|계약금액)/.test(joined)) {
+      return "track";
+    }
+    if (/(품명|품목)/.test(joined) && /(수량|단가|공급가액|규격)/.test(joined)) {
+      return "items";
+    }
+    return null;
+  }
+
+  function mapListCellValue(tableKind, headerLabel, rowOffset, contextPool) {
+    const h = String(headerLabel || "").replace(/\s+/g, "");
+    if (tableKind === "staff") {
+      const rec = (contextPool.staffRows || [])[rowOffset];
+      if (!rec) return { value: "", source: "기업자료" };
+      if (/^(구분|역할구분)$/.test(h)) return { value: rowOffset === 0 ? "총괄책임(PM)" : "참여인력", source: "기업자료" };
+      if (/성명|이름/.test(h)) return { value: rec.name || "", source: "기업자료" };
+      if (/직급|직책|직위/.test(h)) return { value: rec.title || "", source: "기업자료" };
+      if (/담당|역할/.test(h)) return { value: rec.role || "", source: "기업자료" };
+      if (/경력|학위|자격|비고/.test(h)) return { value: rec.career || "", source: "기업자료" };
+    } else if (tableKind === "track") {
+      const rec = (contextPool.trackRows || [])[rowOffset];
+      if (!rec) return { value: "", source: "기업자료" };
+      if (/^(no|번호|연번)$/i.test(h)) return { value: String(rowOffset + 1), source: "기업자료" };
+      if (/기관|발주/.test(h)) return { value: rec.org || "", source: "기업자료" };
+      if (/사업명|과제|용역|납품/.test(h)) return { value: rec.project || "", source: "기업자료" };
+      if (/기간|일자/.test(h)) return { value: rec.period || "", source: "기업자료" };
+      if (/금액|계약금/.test(h)) return { value: rec.amount || "", source: "기업자료" };
+    } else if (tableKind === "items") {
+      const rec = (contextPool.itemRows || [])[rowOffset];
+      if (!rec) return { value: "", source: "공고·서식 연동" };
+      if (/^(no|번호|연번)$/i.test(h)) return { value: String(rowOffset + 1), source: "공고·서식 연동" };
+      if (/품명|품목/.test(h)) return { value: rec.name || "", source: "공고·서식 연동" };
+      if (/규격|사양/.test(h)) return { value: rec.spec || "", source: "공고·서식 연동" };
+      if (/단위/.test(h)) return { value: rec.unit || "", source: "공고·서식 연동" };
+      if (/수량/.test(h)) return { value: String(rec.qty ?? ""), source: "공고·서식 연동" };
+      if (/단가/.test(h)) return { value: String(rec.price ?? ""), source: "공고·서식 연동" };
+      if (/공급가액|금액/.test(h)) return { value: String(rec.amount ?? ""), source: "공고·서식 연동" };
+    }
+    return { value: "", source: "직접 입력 / AI 매핑 대상" };
+  }
+
   /**
-   * Fills {{PLACEHOLDER}} tokens AND smartly populates blank adjacent table cells
-   * in an HWPX (KS X 6101) archive without leaving the browser.
+   * Schema-agnostic HWPX form analyzer: detects {{TOKEN}} placeholders,
+   * repeating list tables (staff/track/items), and horizontal/vertical key-value blank cells
+   * in ANY KS X 6101 (.hwpx) archive, returning an editable slot plan.
    */
-  async function fillHwpxTemplate(arrayBuffer, placeholderMap, labelValueMap) {
+  async function analyzeHwpxForm(arrayBuffer, contextPool) {
     if (!global.JSZip) {
       throw new Error("JSZip 라이브러리가 로드되지 않았습니다.");
     }
     const uint8 = new Uint8Array(arrayBuffer);
     if (!toHex(uint8, 4).startsWith("504b0304")) {
-      throw new Error("지정 양식 채우기는 .hwpx(OWPML XML) 포맷만 지원합니다.");
+      throw new Error("양식 분석은 .hwpx(OWPML XML) 포맷만 지원합니다.");
     }
 
+    const zip = await global.JSZip.loadAsync(uint8);
+    const sectionFiles = Object.keys(zip.files)
+      .filter((n) => /^Contents\/section\d+\.xml$/i.test(n))
+      .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10));
+
+    const domParser = new DOMParser();
+    const slots = [];
+    const seenTokens = new Set();
+    let totalTables = 0;
+    const allTexts = [];
+
+    const phMap = (contextPool && contextPool.placeholders) || {};
+    const kvMap = (contextPool && contextPool.kv) || {};
+
+    for (const secFile of sectionFiles) {
+      const xmlStr = await zip.files[secFile].async("string");
+      allTexts.push(xmlStr.replace(/<[^>]+>/g, " "));
+
+      // Pass 1: Detect {{PLACEHOLDER}} tokens
+      const tokenRe = /\{\{([A-Z0-9_]+)\}\}/g;
+      let match;
+      while ((match = tokenRe.exec(xmlStr)) !== null) {
+        const token = match[1];
+        if (seenTokens.has(token)) continue;
+        seenTokens.add(token);
+        const itemMatch = token.match(/^ITEM(\d+)_(NAME|SPEC|UNIT|QTY|PRICE|AMOUNT)$/);
+        let label = token;
+        let source = "공고·서식 연동";
+        if (TOKEN_FRIENDLY_LABELS[token]) {
+          [label, source] = TOKEN_FRIENDLY_LABELS[token];
+        } else if (itemMatch) {
+          const fieldKr = {
+            NAME: "품명",
+            SPEC: "규격",
+            UNIT: "단위",
+            QTY: "수량",
+            PRICE: "단가",
+            AMOUNT: "공급가액",
+          }[itemMatch[2]];
+          label = `품목 ${itemMatch[1]} ${fieldKr}`;
+        }
+        slots.push({
+          id: `ph_${token}`,
+          kind: "placeholder",
+          secFile,
+          token,
+          location: `토큰 {{${token}}}`,
+          label,
+          source,
+          value: String(phMap[token] ?? ""),
+        });
+      }
+
+      // Pass 2 & 3: Structural DOM table scan for blank cells (no {{}} placeholders)
+      const doc = domParser.parseFromString(xmlStr, "application/xml");
+      if (doc.getElementsByTagName("parsererror").length > 0) continue;
+
+      const tblEls = Array.from(doc.getElementsByTagName("*")).filter(
+        (el) => localName(el) === "tbl"
+      );
+      totalTables += tblEls.length;
+      const consumedTables = new Set();
+
+      // Pass 2: Repeating list tables (staff, track record, line items)
+      tblEls.forEach((tbl, tblIdx) => {
+        const trEls = Array.from(tbl.children).filter((c) => localName(c) === "tr");
+        if (trEls.length < 2) return;
+        const headerCells = Array.from(trEls[0].children).filter((c) => localName(c) === "tc");
+        const headerTexts = headerCells.map(collectElementText);
+        const tableKind = detectRepeatingTableKind(headerTexts);
+        if (!tableKind) return;
+
+        let createdAnyListSlot = false;
+        for (let r = 1; r < trEls.length; r += 1) {
+          const rowCells = Array.from(trEls[r].children).filter((c) => localName(c) === "tc");
+          for (let c = 0; c < rowCells.length; c += 1) {
+            const cellTxt = collectElementText(rowCells[c]);
+            if (!isBlankCellText(cellTxt) || /\{\{/.test(cellTxt)) continue;
+            const hLabel = headerTexts[c] || `컬럼${c + 1}`;
+            const mapped = mapListCellValue(tableKind, hLabel, r - 1, contextPool || {});
+            slots.push({
+              id: `list_${tblIdx}_${r}_${c}`,
+              kind: "list_cell",
+              secFile,
+              tblIdx,
+              rowIdx: r,
+              colIdx: c,
+              tableKind,
+              location: `표${tblIdx + 1} ${r}행 (${hLabel})`,
+              label: `${tableKind === "staff" ? "참여인력" : tableKind === "track" ? "수행실적" : "품목"} ${r}행 · ${hLabel}`,
+              source: mapped.value ? mapped.source : "직접 입력 / AI 매핑 대상",
+              value: mapped.value,
+            });
+            createdAnyListSlot = true;
+          }
+        }
+        if (createdAnyListSlot) {
+          consumedTables.add(tblIdx);
+        }
+      });
+
+      // Pass 3: Key-value pairs (horizontal & vertical section-header rows)
+      tblEls.forEach((tbl, tblIdx) => {
+        if (consumedTables.has(tblIdx)) return;
+        const trEls = Array.from(tbl.children).filter((c) => localName(c) === "tr");
+
+        for (let r = 0; r < trEls.length; r += 1) {
+          const cells = Array.from(trEls[r].children).filter((c) => localName(c) === "tc");
+
+          // 3A. Vertical 1-col header cell followed by 1-col blank narrative cell
+          if (cells.length === 1 && r + 1 < trEls.length) {
+            const nextCells = Array.from(trEls[r + 1].children).filter((c) => localName(c) === "tc");
+            if (nextCells.length === 1) {
+              const headerTxt = collectElementText(cells[0]);
+              const bodyTxt = collectElementText(nextCells[0]);
+              if (
+                headerTxt &&
+                headerTxt.length <= 60 &&
+                !/\{\{/.test(headerTxt) &&
+                isBlankCellText(bodyTxt)
+              ) {
+                const matched = matchSemanticRule(headerTxt);
+                const val = matched && kvMap[matched.key] != null ? String(kvMap[matched.key]) : "";
+                slots.push({
+                  id: `kv_${tblIdx}_${r + 1}_0`,
+                  kind: "kv_cell",
+                  secFile,
+                  tblIdx,
+                  rowIdx: r + 1,
+                  colIdx: 0,
+                  key: matched ? matched.key : "",
+                  location: `표${tblIdx + 1} ${r + 2}행`,
+                  label: headerTxt,
+                  source: val ? matched.source : "직접 입력 / AI 매핑 대상",
+                  value: val,
+                });
+                continue;
+              }
+            }
+          }
+
+          // 3B. Horizontal label -> blank adjacent value cell
+          for (let c = 0; c < cells.length - 1; c += 1) {
+            const labelTxt = collectElementText(cells[c]);
+            const nextTxt = collectElementText(cells[c + 1]);
+            if (!labelTxt || labelTxt.length > 36 || /\{\{/.test(labelTxt)) continue;
+            if (!isBlankCellText(nextTxt)) continue;
+
+            const matched = matchSemanticRule(labelTxt);
+            const val = matched && kvMap[matched.key] != null ? String(kvMap[matched.key]) : "";
+            slots.push({
+              id: `kv_${tblIdx}_${r}_${c + 1}`,
+              kind: "kv_cell",
+              secFile,
+              tblIdx,
+              rowIdx: r,
+              colIdx: c + 1,
+              key: matched ? matched.key : "",
+              location: `표${tblIdx + 1} ${r + 1}행 ${c + 2}열`,
+              label: labelTxt,
+              source: val ? matched.source : "직접 입력 / AI 매핑 대상",
+              value: val,
+            });
+          }
+        }
+      });
+    }
+
+    const joinedText = allTexts.join(" ");
+    let formType = "임의 기관 지정 양식(.hwpx)";
+    if (/업체\s*일반현황|참여인력/.test(joinedText)) {
+      formType = "업체 일반현황 · 참여인력 현황표";
+    } else if (/사업수행계획서|수행\s*목표/.test(joinedText)) {
+      formType = "사업수행계획서";
+    } else if (/견적제출|견적서/.test(joinedText)) {
+      formType = "표준 견적·납품 양식";
+    }
+
+    return {
+      formType,
+      tableCount: totalTables,
+      sectionCount: sectionFiles.length,
+      slots,
+    };
+  }
+
+  /**
+   * Applies an analyzed/edited slot plan back into the .hwpx ZIP container
+   * preserving original OWPML formatting and uncompressed mimetype entry.
+   */
+  async function applySlotPlanToHwpx(arrayBuffer, slots) {
+    if (!global.JSZip) {
+      throw new Error("JSZip 라이브러리가 로드되지 않았습니다.");
+    }
+    const uint8 = new Uint8Array(arrayBuffer);
     const inZip = await global.JSZip.loadAsync(uint8);
     const outZip = new global.JSZip();
-    const filledFields = [];
+    const domParser = new DOMParser();
+    const serializer = new XMLSerializer();
 
-    const rules = [
-      [/^(상호|법인명|업체명|공급자|회사명)/, "COMPANY_NAME"],
-      [/^(사업자등록번호|사업자번호)/, "BIZ_NO"],
-      [/^(대표자|대표이사|성명)/, "CEO_NAME"],
-      [/^(주소|소재지|본사주소|공장주소)/, "COMPANY_ADDR"],
-      [/^(담당자)/, "CONTACT_NAME"],
-      [/^(연락처|전화|휴대전화)/, "CONTACT_PHONE"],
-      [/^(보유인증|인증)/, "CERTIFICATIONS"],
-      [/^(계좌|입금계좌)/, "BANK_ACCOUNT"],
-      [/^(발주기관|공고기관|수신처)/, "ISSUING_AGENCY"],
-      [/^(공고번호|관리번호)/, "NOTICE_NO"],
-      [/^(건명|사업명|품의제목|용역명)/, "PROJECT_NAME"],
-      [/^(납기|납품기한|계약기한)/, "DUE_DATE"],
-      [/^(합계금액|총합계금액|총액|견적금액|품의요청총액)/, "GRAND_TOTAL"],
-      [/^(공급가액)/, "TOTAL_SUPPLY"],
-      [/^(부가세|부가가치세|세액)/, "VAT_AMOUNT"],
-    ];
+    const phSlots = (slots || []).filter((s) => s.kind === "placeholder");
+    const cellSlots = (slots || []).filter((s) => s.kind === "kv_cell" || s.kind === "list_cell");
+    let filledCount = 0;
 
     const names = Object.keys(inZip.files);
     const sortedNames = [
@@ -506,53 +811,43 @@
       ...names.filter((n) => n !== "mimetype"),
     ];
 
-    const domParser = new DOMParser();
-    const serializer = new XMLSerializer();
-
     for (const entryName of sortedNames) {
       const zipEntry = inZip.files[entryName];
       if (zipEntry.dir) continue;
 
       if (/^Contents\/section\d+\.xml$/i.test(entryName)) {
         let xmlStr = await zipEntry.async("string");
-        let placeholderHits = 0;
 
-        for (const [k, v] of Object.entries(placeholderMap || {})) {
-          const token = `{{${k}}}`;
+        for (const s of phSlots) {
+          const token = `{{${s.token}}}`;
           if (xmlStr.includes(token)) {
-            xmlStr = xmlStr.split(token).join(xmlEscape(v));
-            placeholderHits += 1;
-            filledFields.push(k);
+            xmlStr = xmlStr.split(token).join(xmlEscape(s.value ?? ""));
+            filledCount += 1;
           }
         }
 
-        // Fallback smart label -> blank adjacent cell fill for arbitrary external HWPX templates
-        if (labelValueMap && Object.keys(labelValueMap).length > 0) {
+        const secCellSlots = cellSlots.filter(
+          (s) => s.secFile === entryName && String(s.value ?? "").trim() !== ""
+        );
+        if (secCellSlots.length > 0) {
           const doc = domParser.parseFromString(xmlStr, "application/xml");
-          const hasParseErr = doc.getElementsByTagName("parsererror").length > 0;
-          if (!hasParseErr) {
-            let domChanged = false;
-            const trEls = Array.from(doc.getElementsByTagName("*")).filter(
-              (el) => localName(el) === "tr"
+          if (doc.getElementsByTagName("parsererror").length === 0) {
+            const tblEls = Array.from(doc.getElementsByTagName("*")).filter(
+              (el) => localName(el) === "tbl"
             );
-            for (const tr of trEls) {
-              const cells = Array.from(tr.children).filter((c) => localName(c) === "tc");
-              for (let i = 0; i < cells.length - 1; i += 1) {
-                const labelTxt = collectElementText(cells[i]).replace(/[\s:：()（）]/g, "");
-                const nextTxt = collectElementText(cells[i + 1]);
-                if (!labelTxt) continue;
-                const isNextBlank =
-                  nextTxt === "" || nextTxt === "-" || nextTxt === "()" || /^\(?\s*\)?$/.test(nextTxt);
-                if (!isNextBlank) continue;
-                for (const [rePattern, mapKey] of rules) {
-                  if (rePattern.test(labelTxt) && labelValueMap[mapKey]) {
-                    if (setFirstCellText(cells[i + 1], String(labelValueMap[mapKey]))) {
-                      domChanged = true;
-                      filledFields.push(`${labelTxt}->${mapKey}`);
-                    }
-                    break;
-                  }
-                }
+            let domChanged = false;
+            for (const s of secCellSlots) {
+              const tbl = tblEls[s.tblIdx];
+              if (!tbl) continue;
+              const trs = Array.from(tbl.children).filter((c) => localName(c) === "tr");
+              const tr = trs[s.rowIdx];
+              if (!tr) continue;
+              const tcs = Array.from(tr.children).filter((c) => localName(c) === "tc");
+              const tc = tcs[s.colIdx];
+              if (!tc) continue;
+              if (setFirstCellText(tc, String(s.value ?? ""))) {
+                domChanged = true;
+                filledCount += 1;
               }
             }
             if (domChanged) {
@@ -564,8 +859,8 @@
         outZip.file(entryName, xmlStr, { compression: "DEFLATE" });
       } else if (entryName === "Preview/PrvText.txt") {
         let txt = await zipEntry.async("string");
-        for (const [k, v] of Object.entries(placeholderMap || {})) {
-          txt = txt.split(`{{${k}}}`).join(String(v ?? ""));
+        for (const s of phSlots) {
+          txt = txt.split(`{{${s.token}}}`).join(String(s.value ?? ""));
         }
         outZip.file(entryName, txt, { compression: "DEFLATE" });
       } else if (entryName === "mimetype") {
@@ -582,10 +877,22 @@
       mimeType: "application/hwp+zip",
     });
 
+    return { blob, filledCount };
+  }
+
+  /**
+   * Backward-compatible direct fill helper reusing SEMANTIC_RULES.
+   */
+  async function fillHwpxTemplate(arrayBuffer, placeholderMap, labelValueMap) {
+    const plan = await analyzeHwpxForm(arrayBuffer, {
+      placeholders: placeholderMap || {},
+      kv: labelValueMap || {},
+    });
+    const applied = await applySlotPlanToHwpx(arrayBuffer, plan.slots);
     return {
-      blob,
-      filledCount: filledFields.length,
-      filledFields: Array.from(new Set(filledFields)),
+      blob: applied.blob,
+      filledCount: applied.filledCount,
+      filledFields: plan.slots.filter((s) => String(s.value || "").trim()).map((s) => s.label),
     };
   }
 
@@ -593,5 +900,7 @@
     parseHwpFile,
     buildFallbackChainFromParsed,
     fillHwpxTemplate,
+    analyzeHwpxForm,
+    applySlotPlanToHwpx,
   };
 })(window);

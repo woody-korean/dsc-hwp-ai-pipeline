@@ -1,7 +1,9 @@
 (function () {
   const BAZE_ENDPOINT = "https://factchat-cloud.mindlogic.ai/v1/gateway/chat/completions";
   const BAZE_MODEL = "gpt-6.1-terra";
-  const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v1";
+  const ASSET_VER = "20261124c";
+  const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
+  const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
   const DEFAULT_PROFILE = {
     name: "(주)대덕정밀기계",
@@ -12,7 +14,28 @@
     phone: "042-930-4100 / sales@dd-precision.kr",
     certs: "벤처기업 · 이노비즈 · 직접생산확인",
     bank: "기업은행 314-092811-01-012",
+    est_rev: "2016.04.15 설립 · 연매출 42억 원 · 상시 18명 (연구전담 6명)",
+    capability: "5축 CNC 머시닝센터 4대 · 3차원 좌표측정기(CMM) · DQMS/ISO9001 전수검수 체계",
+    staff_text: [
+      "이준호 | 수석연구원 | 총괄책임자(PM) | 기계공학 박사 · 방산/출연연 납품 12년",
+      "박서연 | 책임연구원 | 시스템·SW/검증 | 컴퓨터공학 석사 · GPU/임베디드 8년",
+      "최민규 | 품질팀장 | 품질보증(QA)·검수 | 국방품질경영시스템(DQMS) · 정밀측정 10년",
+    ].join("\n"),
+    track_record_text: [
+      "국방과학연구소(ADD) | UAV 구동부 정밀 하우징 시제품 | 2025.03 ~ 2025.11 | 8,400만 원",
+      "한국항공우주연구원 | 위성시험용 광학 마운트 제작 | 2024.06 ~ 2025.02 | 6,200만 원",
+      "한국표준과학연구원 | 고집적 GPU 서버 랙 냉각 모듈 납품 | 2024.02 ~ 2024.09 | 4,900만 원",
+    ].join("\n"),
   };
+
+  const DOC_REGISTRY = [
+    { id: "quotation", name: "1. 표준 견적서", kind: "핵심 4종" },
+    { id: "purchase_order", name: "2. 발주서 · 작업지시서", kind: "핵심 4종" },
+    { id: "delivery_inspection", name: "3. 거래명세서 · 납품검수조서", kind: "핵심 4종" },
+    { id: "expense_approval", name: "4. 지출결의서 · 내부 품의서", kind: "핵심 4종" },
+    { id: "form_company_staff", name: "기관양식 A. 업체 일반현황 · 참여인력표 (.hwpx)", kind: "기관 양식" },
+    { id: "form_project_plan", name: "기관양식 B. 사업수행계획서 요약 (.hwpx)", kind: "기관 양식" },
+  ];
 
   let cases = [];
   let activeCase = null;
@@ -21,14 +44,97 @@
   let activeDocTab = "quotation";
   let simulateMismatch = false;
   let companyProfile = { ...DEFAULT_PROFILE };
+  let activeFormBuffer = null;
+  let activeFormFilename = "";
+  let activeFormPlan = null;
 
   const el = (id) => document.getElementById(id);
 
+  function defaultRevisions() {
+    return {
+      quotation: 1,
+      purchase_order: 1,
+      delivery_inspection: 1,
+      expense_approval: 1,
+      form_company_staff: 1,
+      form_project_plan: 1,
+    };
+  }
+
+  function ensureDocRevisions(c) {
+    c.doc_revisions = { ...defaultRevisions(), ...(c.doc_revisions || {}) };
+    return c.doc_revisions;
+  }
+
+  function parseStaffRows(raw) {
+    return String(raw || "")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split("|").map((p) => p.trim());
+        return {
+          name: parts[0] || "",
+          title: parts[1] || "연구원",
+          role: parts[2] || "참여인력",
+          career: parts[3] || "",
+        };
+      });
+  }
+
+  function parseTrackRows(raw) {
+    return String(raw || "")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const parts = line.split("|").map((p) => p.trim());
+        return {
+          org: parts[0] || "",
+          project: parts[1] || "",
+          period: parts[2] || "",
+          amount: parts[3] || "",
+        };
+      });
+  }
+
+  function getEffectiveStaffRows(c) {
+    const baseRows = parseStaffRows(companyProfile.staff_text);
+    const desiredPm = (c && c.pm_name) || "";
+    if (!desiredPm || baseRows.length === 0) return baseRows;
+
+    const matchIdx = baseRows.findIndex((r) => r.name === desiredPm || r.name.includes(desiredPm));
+    const reordered = baseRows.map((r) => ({ ...r }));
+    if (matchIdx > 0) {
+      const [picked] = reordered.splice(matchIdx, 1);
+      if (reordered[0] && /PM|총괄/.test(reordered[0].role)) {
+        reordered[0].role = "핵심기술지원 (전임 PM)";
+      }
+      picked.role = "총괄책임자(PM)";
+      reordered.unshift(picked);
+    } else if (matchIdx === -1) {
+      if (reordered[0] && /PM|총괄/.test(reordered[0].role)) {
+        reordered[0].role = "핵심기술지원";
+      }
+      reordered.unshift({
+        name: desiredPm,
+        title: "책임연구원",
+        role: "총괄책임자(PM)",
+        career: "변경 지정 총괄책임자(PM)",
+      });
+    } else {
+      reordered[0].role = "총괄책임자(PM)";
+    }
+    return reordered;
+  }
+
   function loadProfile() {
     try {
-      const saved = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || "null");
-      if (saved && typeof saved === "object") {
-        companyProfile = { ...DEFAULT_PROFILE, ...saved };
+      const savedV2 = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || "null");
+      const savedV1 = JSON.parse(localStorage.getItem(LEGACY_PROFILE_KEY) || "null");
+      const merged = savedV2 || savedV1;
+      if (merged && typeof merged === "object") {
+        companyProfile = { ...DEFAULT_PROFILE, ...merged };
       }
     } catch (_) {
       companyProfile = { ...DEFAULT_PROFILE };
@@ -54,6 +160,10 @@
       profPhone: "phone",
       profCerts: "certs",
       profBank: "bank",
+      profEstRev: "est_rev",
+      profCapability: "capability",
+      profStaff: "staff_text",
+      profTrackRecord: "track_record_text",
     };
     Object.entries(map).forEach(([id, key]) => {
       const node = el(id);
@@ -75,6 +185,10 @@
       phone: (el("profPhone")?.value || "").trim() || DEFAULT_PROFILE.phone,
       certs: (el("profCerts")?.value || "").trim() || DEFAULT_PROFILE.certs,
       bank: (el("profBank")?.value || "").trim() || DEFAULT_PROFILE.bank,
+      est_rev: (el("profEstRev")?.value || "").trim() || DEFAULT_PROFILE.est_rev,
+      capability: (el("profCapability")?.value || "").trim() || DEFAULT_PROFILE.capability,
+      staff_text: (el("profStaff")?.value || "").trim() || DEFAULT_PROFILE.staff_text,
+      track_record_text: (el("profTrackRecord")?.value || "").trim() || DEFAULT_PROFILE.track_record_text,
     };
     const prev = el("profileSummaryPreview");
     if (prev) {
@@ -115,8 +229,10 @@
     return JSON.parse(JSON.stringify(obj));
   }
 
-  function recalcCaseTotals(c) {
+  function recalcCaseTotals(c, opts = {}) {
+    const syncFromQuotation = opts.syncFromQuotation !== false;
     applyProfileToCase(c);
+    ensureDocRevisions(c);
     const q = c.doc_chain.quotation;
     const po = c.doc_chain.purchase_order;
     const di = c.doc_chain.delivery_inspection;
@@ -130,18 +246,20 @@
       it.supply_amount = it.qty * it.unit_price;
       totalSupply += it.supply_amount;
 
-      if (po.items[idx]) po.items[idx].qty = it.qty;
-      if (di.items[idx]) {
-        di.items[idx].ordered_qty = it.qty;
-        let deliv = it.qty;
-        if (idx === 0) {
-          if (shortage > 0) deliv = Math.max(0, it.qty - shortage);
-          if (simulateMismatch) deliv = Math.max(0, deliv - 1);
+      if (syncFromQuotation) {
+        if (po.items[idx]) po.items[idx].qty = it.qty;
+        if (di.items[idx]) {
+          di.items[idx].ordered_qty = it.qty;
+          let deliv = it.qty;
+          if (idx === 0) {
+            if (shortage > 0) deliv = Math.max(0, it.qty - shortage);
+            if (simulateMismatch) deliv = Math.max(0, deliv - 1);
+          }
+          di.items[idx].delivered_qty = deliv;
+          di.items[idx].passed_qty = deliv;
+          di.items[idx].result =
+            di.items[idx].delivered_qty === di.items[idx].ordered_qty ? "적합" : "수량불일치(보류)";
         }
-        di.items[idx].delivered_qty = deliv;
-        di.items[idx].passed_qty = deliv;
-        di.items[idx].result =
-          di.items[idx].delivered_qty === di.items[idx].ordered_qty ? "적합" : "수량불일치(보류)";
       }
     });
 
@@ -149,9 +267,13 @@
     q.vat = Math.round(totalSupply * 0.1);
     q.grand_total = totalSupply + q.vat;
 
-    ap.total_supply = totalSupply;
-    ap.vat = q.vat;
-    ap.grand_total = simulateMismatch ? q.grand_total + 550000 : q.grand_total;
+    if (syncFromQuotation) {
+      ap.total_supply = totalSupply;
+      ap.vat = q.vat;
+      ap.grand_total = simulateMismatch ? q.grand_total + 550000 : q.grand_total;
+    } else if (simulateMismatch) {
+      ap.grand_total = q.grand_total + 550000;
+    }
 
     const qtyMatch = q.items.every(
       (it, i) =>
@@ -172,14 +294,14 @@
           status: qtyMatch ? "PASS" : "FAIL",
           detail: qtyMatch
             ? `${q.items.length}개 품목 수량 100% 일치`
-            : `1번 품목 발주(${q.items[0].qty}) ≠ 실납품(${di.items[0].delivered_qty}) 불일치 탐지!`,
+            : `1번 품목 발주(${po.items[0]?.qty ?? q.items[0].qty}) ≠ 실납품(${di.items[0]?.delivered_qty ?? 0}) 불일치 탐지!`,
         },
         {
           rule: "공급가액·부가세(10%)·품의총액 산식 검증",
           status: totalMatch ? "PASS" : "FAIL",
           detail: totalMatch
             ? `공급가액 ${num(totalSupply)}원 + VAT ${num(q.vat)}원 = ${num(q.grand_total)}원 일치`
-            : `견적총액(${num(q.grand_total)}원) ≠ 품의총액(${num(ap.grand_total)}원) 차이 550,000원 경고!`,
+            : `견적총액(${num(q.grand_total)}원) ≠ 품의총액(${num(ap.grand_total)}원) 차이 경고!`,
         },
         {
           rule: "납기·검수 일정 정합성 검증",
@@ -197,19 +319,31 @@
 
   function resetChangeRequestPanel() {
     pendingProposal = null;
-    if (el("applyChangeBtn")) el("applyChangeBtn").disabled = true;
+    if (el("applyChangeBtn")) {
+      el("applyChangeBtn").disabled = true;
+      el("applyChangeBtn").textContent = "선택된 서류만 개정 반영";
+    }
     if (el("copyReplyBtn")) el("copyReplyBtn").disabled = true;
-    if (el("revertRevBtn")) el("revertRevBtn").disabled = !(activeCase && (activeCase.revision || 1) > 1);
+    if (el("revertRevBtn")) {
+      const hasAnyRev = activeCase && Object.values(ensureDocRevisions(activeCase)).some((r) => r > 1);
+      el("revertRevBtn").disabled = !hasAnyRev;
+    }
     if (el("changeStatusLine")) el("changeStatusLine").textContent = "";
+    if (el("impactMatrixBox")) {
+      el("impactMatrixBox").innerHTML = `
+        <div class="text-block" style="color: var(--muted);">
+          위 시나리오 버튼을 누르거나 변경 요청을 입력한 뒤 <strong>[영향 서류 판별 및 Diff 비교]</strong>를 실행하면, 6종 서류(핵심 4종 + 기관양식 2종) 중 <strong>실제로 수정이 필요한 서류만 자동 체크</strong>되고 무관한 서류는 기존 버전(Rev.1)을 유지합니다.
+        </div>`;
+    }
     if (el("changeDiffBox")) {
       el("changeDiffBox").innerHTML = `
         <div class="text-block" style="color: var(--muted);">
-          위 시나리오 버튼을 누르거나 거래처 변경 메일 내용을 입력한 뒤 <strong>[변경요청 분석 및 Diff 비교]</strong>를 실행하면, 수량·단가·부가세·총액·납기 변화량이 즉시 계산됩니다.
+          변경 요청 분석 시 수량·단가·납기·납품장소·총괄책임자(PM)·총액 변동 내역이 대조 표시됩니다.
         </div>`;
     }
     if (el("replyDraftBox")) {
       el("replyDraftBox").textContent =
-        "변경요청 분석 후 거래처에 바로 발송할 수 있는 공식 회신 문구(변경 내역·조정 금액·납기 확인·서명 포함)가 자동 생성됩니다.";
+        "변경요청 분석 후 개정 서류(Rev.2) 및 원안 유지 서류(Rev.1)가 구분 명시된 공식 회신 문구가 자동 생성됩니다.";
     }
   }
 
@@ -218,10 +352,19 @@
     el("toggleMismatchBtn").classList.remove("btn-accent");
     activeCase = deepClone(c);
     activeCase.revision = 1;
+    activeCase.doc_revisions = defaultRevisions();
     activeCase.shortage_qty = 0;
     activeCase.last_change_summary = "";
+    activeCase.delivery_location =
+      activeCase.doc_chain?.delivery_inspection?.delivery_location || "발주기관 지정 납품장소";
+    activeCase.pm_name = parseStaffRows(companyProfile.staff_text)[0]?.name || "이준호";
     recalcCaseTotals(activeCase);
     baselineCase = deepClone(activeCase);
+    if (el("formWorkbenchPreview")) {
+      el("formWorkbenchPreview").classList.add("hidden");
+    }
+    activeFormBuffer = null;
+    activeFormPlan = null;
     resetChangeRequestPanel();
     renderAll();
   }
@@ -570,21 +713,37 @@
 
   function renderAll() {
     if (!activeCase) return;
+    const revs = ensureDocRevisions(activeCase);
     renderCorpusCards();
     renderStep1(activeCase);
     renderStep2(activeCase);
     renderCrossCheck(activeCase);
     renderSheet(activeCase);
 
-    const rev = activeCase.revision || 1;
+    ["quotation", "purchase_order", "delivery_inspection", "expense_approval"].forEach((docId) => {
+      const badge = el(`tabRev_${docId}`);
+      if (badge) {
+        badge.textContent = `Rev.${revs[docId] || 1}`;
+        badge.classList.toggle("updated", (revs[docId] || 1) > 1);
+      }
+    });
+    ["form_company_staff", "form_project_plan"].forEach((docId) => {
+      const badge = el(`formRev_${docId}`);
+      if (badge) {
+        badge.textContent = `Rev.${revs[docId] || 1}`;
+        badge.classList.toggle("updated", (revs[docId] || 1) > 1);
+      }
+    });
+
+    const updatedCount = Object.values(revs).filter((r) => r > 1).length;
     if (el("revisionBadge")) {
       el("revisionBadge").textContent =
-        rev === 1
-          ? "현재 문서 버전: Rev.1 (최초 기안)"
-          : `현재 문서 버전: Rev.${rev} (${activeCase.last_change_summary || "변경 반영"})`;
+        updatedCount === 0
+          ? "관리 대상 6종 문서 · 전체 Rev.1 (최초 기안)"
+          : `선별 개정 상태: ${updatedCount}종 개정(Rev.2+) / ${6 - updatedCount}종 Rev.1 유지 (${activeCase.last_change_summary || "변경 반영"})`;
     }
     if (el("revertRevBtn")) {
-      el("revertRevBtn").disabled = rev <= 1;
+      el("revertRevBtn").disabled = updatedCount === 0;
     }
 
     const first = activeCase.doc_chain.quotation.items[0];
@@ -772,18 +931,21 @@
 
   function buildTemplateMaps(c) {
     applyProfileToCase(c);
+    const revs = ensureDocRevisions(c);
     const q = c.doc_chain.quotation;
     const po = c.doc_chain.purchase_order;
     const di = c.doc_chain.delivery_inspection;
     const s = c.source_summary || {};
-    const revTag = `Rev.${c.revision || 1}`;
+    const revTag = `Rev.${revs.quotation || 1}`;
     const map = {
       COMPANY_NAME: companyProfile.name,
       BIZ_NO: companyProfile.biz_no,
       CEO_NAME: companyProfile.ceo,
+      EST_REV: companyProfile.est_rev,
       COMPANY_ADDR: companyProfile.addr,
       CONTACT_NAME: companyProfile.contact,
       CONTACT_PHONE: companyProfile.phone,
+      CONTACT_COMBINED: `${companyProfile.contact} (${companyProfile.phone})`,
       CERTIFICATIONS: companyProfile.certs,
       BANK_ACCOUNT: companyProfile.bank,
       ISSUING_AGENCY: s.issuing_agency || q.recipient || "-",
@@ -793,6 +955,8 @@
       REVISION_TAG: revTag,
       DOC_DATE: q.quote_date || "-",
       DUE_DATE: po.due_date || di.delivery_date || "-",
+      DELIVERY_LOCATION: c.delivery_location || di.delivery_location || "발주기관 지정 장소",
+      PM_NAME: `${c.pm_name || "이준호"} (총괄책임자 · ${companyProfile.name})`,
       TOTAL_SUPPLY: won(q.total_supply),
       VAT_AMOUNT: won(q.vat),
       GRAND_TOTAL: won(q.grand_total),
@@ -812,37 +976,190 @@
     return map;
   }
 
-  async function fillAndDownloadTemplate(arrayBuffer, outFilename) {
+  function buildUniversalFormContext(c) {
+    const placeholders = buildTemplateMaps(c);
+    const q = c.doc_chain.quotation;
+    const po = c.doc_chain.purchase_order;
+    const di = c.doc_chain.delivery_inspection;
+    const s = c.source_summary || {};
+    const staffRows = getEffectiveStaffRows(c);
+    const trackRows = parseTrackRows(companyProfile.track_record_text);
+    const itemSummary = (q.items || [])
+      .slice(0, 3)
+      .map((it) => `${it.name}(${num(it.qty)}${it.unit})`)
+      .join(", ");
+    const delivLoc = c.delivery_location || di.delivery_location || "발주기관 지정 장소";
+    const pmDisplay = c.pm_name || staffRows[0]?.name || companyProfile.ceo;
+
+    const kv = {
+      ...placeholders,
+      PM_NAME: `${pmDisplay} (${staffRows[0]?.title || "수석연구원"} / ${companyProfile.name})`,
+      DELIVERY_LOCATION: delivLoc,
+      PLAN_GOAL: `${s.issuing_agency || ""} '${s.document_title || q.project_name}' 과업의 요구 규격·정밀 공차를 100% 충족하고 납기 내 안전 검수를 완수함.`,
+      PLAN_SCOPE: `총괄책임자(PM) ${pmDisplay} 책임 하에 ${itemSummary} 제작·공급 및 시험성적서 제출 수행 (총 제안액 ${won(q.grand_total)}).`,
+      PLAN_SCHEDULE: `계약·작업지시(${po.order_date}) → 정밀가공·사내 QA → 현장 납품(장소: ${delivLoc} / 납기: ${po.due_date}) → 검수 완료(${di.delivery_date}).`,
+      PLAN_QUALITY: `${companyProfile.capability} 및 보유 인증(${companyProfile.certs}) 기준 출하 전수검사를 적용함.`,
+      PLAN_TRACK: trackRows.map((t) => `• ${t.org}: ${t.project} (${t.period}, ${t.amount})`).join(" / "),
+    };
+
+    const itemRows = (q.items || []).map((it) => ({
+      name: it.name,
+      spec: it.spec,
+      unit: it.unit,
+      qty: num(it.qty),
+      price: num(it.unit_price),
+      amount: num(it.supply_amount),
+    }));
+
+    return { placeholders, kv, staffRows, trackRows, itemRows };
+  }
+
+  async function tryFillUnmappedSlotsWithBaze(plan, baseCase, apiKey) {
+    const emptySlots = (plan.slots || []).filter((s) => !String(s.value || "").trim());
+    if (emptySlots.length === 0) return;
+
+    const slotList = emptySlots.map((s) => ({ id: s.id, label: s.label, location: s.location }));
+    const sys = `당신은 '${companyProfile.name}' 기관 양식 작성 AI 어시스턴트입니다.
+기업 정보와 공고 요약을 참고해 아래 빈 양식 슬롯 ID별 작성 값을 {"values": {"슬롯ID": "값"}} JSON 형식으로 반환하세요.`;
+    const userMsg = `[기업] ${companyProfile.name} / 사업자 ${companyProfile.biz_no} / 역량 ${companyProfile.capability}
+[공고] ${baseCase.source_summary?.document_title || ""} (${baseCase.source_summary?.issuing_agency || ""})
+[빈 슬롯 목록]\n${JSON.stringify(slotList, null, 2)}`;
+
+    const res = await fetch(BAZE_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: BAZE_MODEL,
+        messages: [
+          { role: "system", content: sys },
+          { role: "user", content: userMsg },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const parsed = JSON.parse(data.choices[0].message.content || "{}");
+    const values = parsed.values || {};
+    emptySlots.forEach((s) => {
+      if (values[s.id]) {
+        s.value = String(values[s.id]);
+        s.source = "AI 초안";
+      }
+    });
+  }
+
+  function renderFormWorkbench() {
+    const preview = el("formWorkbenchPreview");
+    const wrap = el("slotMapTableWrap");
+    if (!preview || !wrap || !activeFormPlan) return;
+
+    const filledCount = activeFormPlan.slots.filter((s) => String(s.value || "").trim() !== "").length;
+    el("workbenchMetaInfo").textContent =
+      `감지된 양식 유형: [${activeFormPlan.formType}] · 표 ${activeFormPlan.tableCount}개 · 자동 매핑 ${filledCount} / ${activeFormPlan.slots.length}개 항목 (${activeFormFilename})`;
+
+    const sourceClass = (src) => {
+      if (src === "기업자료") return "company";
+      if (src === "AI 초안") return "ai";
+      if (src && src.includes("직접")) return "manual";
+      return "";
+    };
+
+    wrap.innerHTML = `
+      <table class="slot-map-table">
+        <thead>
+          <tr>
+            <th style="width: 17%;">양식 내 위치</th>
+            <th style="width: 24%;">감지된 빈 칸 · 항목명</th>
+            <th style="width: 14%;">매핑 출처</th>
+            <th style="width: 45%;">자동 입력값 (직접 클릭해 수정 가능)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${activeFormPlan.slots
+            .map(
+              (s, i) => `
+            <tr>
+              <td class="mono">${esc(s.location)}</td>
+              <td><strong>${esc(s.label)}</strong></td>
+              <td><span class="source-tag ${sourceClass(s.source)}">${esc(s.source)}</span></td>
+              <td><input type="text" class="slot-input" data-slot-idx="${i}" value="${esc(s.value)}" placeholder="필요 시 직접 입력" /></td>
+            </tr>`
+            )
+            .join("")}
+        </tbody>
+      </table>`;
+
+    wrap.querySelectorAll(".slot-input").forEach((inp) => {
+      inp.addEventListener("input", (e) => {
+        const idx = parseInt(e.target.dataset.slotIdx, 10);
+        if (activeFormPlan && activeFormPlan.slots[idx]) {
+          activeFormPlan.slots[idx].value = e.target.value;
+        }
+      });
+    });
+
+    preview.classList.remove("hidden");
+  }
+
+  async function openFormWorkbenchFromBuffer(arrayBuffer, outFilename) {
     const status = el("templateStatusLine");
     if (!activeCase) return;
     try {
-      const maps = buildTemplateMaps(activeCase);
-      const res = await window.HwpBrowserParser.fillHwpxTemplate(arrayBuffer, maps, maps);
-      triggerDownloadBlob(res.blob, outFilename);
-      status.className = "sot-note";
+      const pool = buildUniversalFormContext(activeCase);
+      const plan = await window.HwpBrowserParser.analyzeHwpxForm(arrayBuffer, pool);
+      const key = (el("liveApiKey")?.value || "").trim();
+      if (key) {
+        try {
+          await tryFillUnmappedSlotsWithBaze(plan, activeCase, key);
+        } catch (err) {
+          console.warn("Live BAZE slot fill fallback:", err);
+        }
+      }
+      activeFormBuffer = arrayBuffer;
+      activeFormFilename = outFilename;
+      activeFormPlan = plan;
+      renderFormWorkbench();
+
+      const filledCount = plan.slots.filter((s) => String(s.value || "").trim() !== "").length;
       status.style.color = "var(--navy)";
-      status.textContent = `[완료] '${outFilename}' 생성 및 다운로드 (${res.filledCount}개 항목 자동 채우기 완료)`;
+      status.textContent = `[구조 분석 완료] '${plan.formType}' (표 ${plan.tableCount}개 · ${filledCount}/${plan.slots.length}개 항목 매핑). 아래 표 검토 후 [완성된 .hwpx 내려받기]를 누르세요.`;
     } catch (err) {
-      status.className = "sot-note";
       status.style.color = "var(--fail)";
-      status.textContent = `[오류] 양식 채우기 실패: ${err.message}`;
+      status.textContent = `[오류] 양식 구조 분석 실패: ${err.message}`;
     }
   }
 
+  async function refreshOpenWorkbenchIfVisible() {
+    if (!activeFormBuffer || !activeCase) return;
+    const preview = el("formWorkbenchPreview");
+    if (!preview || preview.classList.contains("hidden")) return;
+    const pool = buildUniversalFormContext(activeCase);
+    activeFormPlan = await window.HwpBrowserParser.analyzeHwpxForm(activeFormBuffer, pool);
+    renderFormWorkbench();
+  }
+
   function exportErpCsv(c) {
+    const revs = ensureDocRevisions(c);
     const q = c.doc_chain.quotation;
     const po = c.doc_chain.purchase_order;
     const s = c.source_summary || {};
-    const revTag = `Rev.${c.revision || 1}`;
+    const revTag = `Rev.${revs.quotation || 1}`;
     const csvCell = (val) => `"${String(val ?? "").replace(/"/g, '""')}"`;
 
     const headers = [
-      "문서버전",
+      "견적버전",
       "공고번호",
       "발주기관",
       "수신처",
       "공급자",
       "사업자등록번호",
+      "총괄책임자(PM)",
+      "납품장소",
       "문서번호",
       "작성일",
       "납기일",
@@ -864,6 +1181,8 @@
         q.recipient || "",
         companyProfile.name,
         companyProfile.biz_no,
+        c.pm_name || "이준호",
+        c.delivery_location || c.doc_chain.delivery_inspection?.delivery_location || "",
         q.doc_no,
         q.quote_date,
         po.due_date || "",
@@ -883,7 +1202,7 @@
 
     const csvContent = "\uFEFF" + [headers.map(csvCell).join(","), ...rows].join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const outName = `${c.id}_Rev${c.revision || 1}_erp_import.csv`;
+    const outName = `${c.id}_Rev${revs.quotation || 1}_erp_import.csv`;
     triggerDownloadBlob(blob, outName);
 
     const status = el("templateStatusLine");
@@ -912,14 +1231,18 @@
     const oldQty = targetItem.qty;
     const oldPrice = targetItem.unit_price;
     const oldDue = po.due_date || "2026-12-20";
+    const oldLoc = baseCase.delivery_location || di.delivery_location || "발주기관 지정 납품장소";
+    const oldPm = baseCase.pm_name || parseStaffRows(companyProfile.staff_text)[0]?.name || "이준호";
 
     let newQty = oldQty;
     let newPrice = oldPrice;
     let newDue = oldDue;
+    let newLocation = oldLoc;
+    let newPm = oldPm;
     let shortageQty = baseCase.shortage_qty || 0;
     const changeTags = [];
 
-    // 1. Quantity change patterns ("100개에서 120개로", "100→120개", "+2개 증량", "수량 5개")
+    // 1. Quantity change patterns ("100개에서 120개로", "100→120개", "+2개 증량")
     const rangeQty = text.match(/(\d[\d,]*)\s*(?:개|EA|SET)?\s*(?:에서|->|→)\s*(\d[\d,]*)\s*(?:개|EA|SET)?/);
     const explicitQty = text.match(/수량[^\d\n]{0,12}(?:을|를|은|는)?\s*(\d[\d,]*)\s*(?:개|EA|SET)?\s*(?:으로|로|까지)/);
     const deltaQty = text.match(/(?:\+\s*(\d+)\s*개|(\d+)\s*개\s*(?:추가|증량|증가))/);
@@ -936,7 +1259,7 @@
       changeTags.push(`수량 ${oldQty}→${newQty}개`);
     }
 
-    // 2. Unit price adjustment ("단가 5% 할인", "단가 300만원으로")
+    // 2. Unit price adjustment
     const pctMatch = text.match(/단가[^\d\n]{0,16}(\d+(?:\.\d+)?)\s*%\s*(할인|인하|감액|조정|인상|증액)/);
     const absPriceMatch = text.match(/단가(?:를|는|은)?\s*(\d[\d,]*)\s*원/);
     if (pctMatch) {
@@ -949,7 +1272,7 @@
       changeTags.push(`단가 ${num(newPrice)}원 조정`);
     }
 
-    // 3. Due date change ("7일 연장" / "일주일 연장" or explicit new target date)
+    // 3. Due date change (evaluate relative N days / 1 week BEFORE standalone explicit date!)
     const daysMatch = text.match(/(\d+)\s*일\s*(연장|연기|순연|단축|앞당)/);
     const weekMatch = text.match(/(일주일|1주|한\s*주)\s*(연장|연기|순연)/);
     const allDates = Array.from(text.matchAll(/(20\d{2})[-./](\d{1,2})[-./](\d{1,2})/g)).map(
@@ -971,7 +1294,37 @@
       changeTags.push(`납기 ${newDue}`);
     }
 
-    // 4. Delivery shortage ("1개 부족", "검수 보류")
+    // 4. Delivery location change ("납품장소는 기존 ...에서 '제2연구동 ...'로 변경")
+    const quotedLocMatch = text.match(
+      /(?:납품\s*장소|납품처|설치\s*장소|수행\s*장소)[^\n.;]{0,45}?['"‘“]([^'"’”\n]{2,45})['"’”]\s*(?:으로|로)?\s*(?:변경|이전|수정)/
+    );
+    const plainLocMatch = text.match(
+      /(?:납품\s*장소|납품처|설치\s*장소|수행\s*장소)(?:을|를|은|는)?\s*(?:[^\n.,]+에서\s+)?([^\n.,'"()]{2,34}?)\s*(?:으로|로)\s*(?:변경|이전|수정)/
+    );
+    if (quotedLocMatch) {
+      newLocation = quotedLocMatch[1].trim();
+      changeTags.push(`납품장소('${newLocation}')`);
+    } else if (plainLocMatch) {
+      newLocation = plainLocMatch[1].trim();
+      changeTags.push(`납품장소('${newLocation}')`);
+    }
+
+    // 5. PM / Staff change ("총괄책임자(PM)를 이준호에서 박서연으로 교체")
+    const pmArrowMatch = text.match(
+      /(?:총괄\s*책임자|연구\s*책임자|PM)(?:\([A-Za-z]+\))?(?:[을를은는])?\s*(?:기존\s+)?([가-힣]{2,3}|[가-힣]{4})(?:\s*(?:수석연구원|책임연구원|선임연구원|연구원|수석|책임|팀장|부장|과장|대리|님))?\s*(?:에서|->|→)\s*([가-힣]{2,3}|[가-힣]{4})(?:\s*(?:수석연구원|책임연구원|선임연구원|연구원|수석|책임|팀장|부장|과장|대리|님))?(?:으로|로)?/
+    );
+    const pmSimpleMatch = text.match(
+      /(?:총괄\s*책임자|연구\s*책임자|PM)(?:\([A-Za-z]+\))?(?:[을를은는])?\s*([가-힣]{2,3}|[가-힣]{4})(?:\s*(?:수석연구원|책임연구원|선임연구원|연구원|수석|책임|팀장|부장|과장|대리|님))?\s*(?:으로|로)\s*(?:교체|변경)/
+    );
+    if (pmArrowMatch) {
+      newPm = pmArrowMatch[2].trim();
+      changeTags.push(`총괄책임자(PM) ${oldPm}→${newPm}`);
+    } else if (pmSimpleMatch) {
+      newPm = pmSimpleMatch[1].trim();
+      changeTags.push(`총괄책임자(PM) →${newPm}`);
+    }
+
+    // 6. Delivery shortage ("1개 부족", "검수 보류")
     const shortMatch = text.match(/(\d+)\s*(?:개|EA|SET)?\s*(?:부족|누락|미납|결품|빠짐)/);
     if (shortMatch) {
       shortageQty = Math.max(1, parseInt(shortMatch[1], 10) || 1);
@@ -983,21 +1336,27 @@
       new_qty: newQty,
       new_unit_price: newPrice,
       new_due_date: newDue,
+      new_location: newLocation,
+      new_pm: newPm,
       delivery_shortage: shortageQty,
       reason_summary: changeTags.length ? changeTags.join(" · ") : "텍스트 기반 변경 검토",
       used_live_llm: false,
       base_due_date: oldDue,
       base_di_date: di.delivery_date || oldDue,
+      base_location: oldLoc,
+      base_pm: oldPm,
     };
   }
 
   async function tryCallBazeChangeAnalysis(text, baseCase, apiKey) {
     const q = baseCase.doc_chain.quotation;
     const po = baseCase.doc_chain.purchase_order;
+    const loc = baseCase.delivery_location || baseCase.doc_chain.delivery_inspection?.delivery_location || "";
+    const pm = baseCase.pm_name || "이준호";
     const sys = `당신은 '${companyProfile.name}' 행정 변경관리 AI 비서입니다.
 현재 문서 JSON 상태와 거래처 변경 요청 메일을 비교해 JSON만 반환하세요.
-스키마: {"target_item_index":0,"new_qty":숫자,"new_unit_price":숫자,"new_due_date":"YYYY-MM-DD","delivery_shortage":0,"reason_summary":"한줄 요약"}`;
-    const userMsg = `[현재 1번 품목] ${q.items[0].name} | 수량=${q.items[0].qty} | 단가=${q.items[0].unit_price} | 납기=${po.due_date}\n\n[거래처 요청]\n${text}`;
+스키마: {"target_item_index":0,"new_qty":숫자,"new_unit_price":숫자,"new_due_date":"YYYY-MM-DD","new_location":"납품장소","new_pm":"성명","delivery_shortage":0,"reason_summary":"한줄 요약"}`;
+    const userMsg = `[현재] 1번=${q.items[0].name} | 수량=${q.items[0].qty} | 단가=${q.items[0].unit_price} | 납기=${po.due_date} | 장소=${loc} | PM=${pm}\n\n[거래처 요청]\n${text}`;
 
     const res = await fetch(BAZE_ENDPOINT, {
       method: "POST",
@@ -1025,7 +1384,203 @@
     };
   }
 
-  function buildReplyEmailDraft(baseCase, afterCase, proposal) {
+  function computeImpactMatrix(baseCase, proposal) {
+    const revs = ensureDocRevisions(baseCase);
+    const q = baseCase.doc_chain.quotation;
+    const po = baseCase.doc_chain.purchase_order;
+    const di = baseCase.doc_chain.delivery_inspection;
+    const idx = proposal.target_item_index || 0;
+    const it = q.items[idx] || q.items[0];
+    const oldDue = po.due_date || "-";
+    const oldLoc = baseCase.delivery_location || di.delivery_location || "";
+    const oldPm = baseCase.pm_name || "이준호";
+
+    const qtyChanged = proposal.new_qty !== it.qty;
+    const priceChanged = proposal.new_unit_price !== it.unit_price;
+    const moneyChanged = qtyChanged || priceChanged;
+    const dueChanged = proposal.new_due_date !== oldDue;
+    const locChanged = Boolean(proposal.new_location && proposal.new_location !== oldLoc);
+    const pmChanged = Boolean(proposal.new_pm && proposal.new_pm !== oldPm);
+    const shortChanged = (proposal.delivery_shortage || 0) !== (baseCase.shortage_qty || 0);
+
+    const reasons = {
+      quotation: moneyChanged
+        ? `품목 수량·단가 및 총액 재산정 필요`
+        : `수량·단가·총액 변동 없음`,
+      purchase_order:
+        qtyChanged || dueChanged || locChanged
+          ? [
+              qtyChanged ? `수량 ${it.qty}→${proposal.new_qty}` : "",
+              dueChanged ? `납기 ${oldDue}→${proposal.new_due_date}` : "",
+              locChanged ? `납품장소 변경` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : `발주 수량·납기·작업지시 변동 없음`,
+      delivery_inspection:
+        qtyChanged || dueChanged || locChanged || shortChanged
+          ? [
+              shortChanged ? `실납품 ${proposal.delivery_shortage}개 부족(검수보류)` : "",
+              qtyChanged ? `검수기준 수량 ${proposal.new_qty}` : "",
+              dueChanged ? `검수예정일 조정` : "",
+              locChanged ? `납품장소 '${proposal.new_location}' 반영` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : `검수 수량·일정·납품처 변동 없음`,
+      expense_approval: moneyChanged
+        ? `집행 예산(총액) 변경으로 재결재 품의 필요`
+        : `지출 총액 변동 없어 품의서 재결재 불필요`,
+      form_company_staff: pmChanged
+        ? `총괄책임자(PM) ${oldPm}→${proposal.new_pm} 참여인력표 현행화`
+        : `기업 일반현황·참여인력 변동 없음`,
+      form_project_plan:
+        pmChanged || dueChanged || locChanged || moneyChanged
+          ? [
+              pmChanged ? `총괄책임자(${proposal.new_pm}) 반영` : "",
+              dueChanged ? `추진일정·기한 조정` : "",
+              locChanged ? `설치·납품장소 현행화` : "",
+              moneyChanged ? `제안 총액 조정` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : `수행목표·일정·인력·장소 변동 없음`,
+    };
+
+    const impactedMap = {
+      quotation: moneyChanged,
+      purchase_order: qtyChanged || dueChanged || locChanged,
+      delivery_inspection: qtyChanged || dueChanged || locChanged || shortChanged,
+      expense_approval: moneyChanged,
+      form_company_staff: pmChanged,
+      form_project_plan: pmChanged || dueChanged || locChanged || moneyChanged,
+    };
+
+    return DOC_REGISTRY.map((meta) => {
+      const currRev = revs[meta.id] || 1;
+      const impacted = Boolean(impactedMap[meta.id]);
+      return {
+        ...meta,
+        impacted,
+        reason: reasons[meta.id],
+        currentRev,
+        nextRev: impacted ? currRev + 1 : currRev,
+      };
+    });
+  }
+
+  function addRevisionSuffix(docNo, revNum) {
+    const clean = String(docNo || "DOC-2026").replace(/-Rev\d+$/i, "");
+    return revNum <= 1 ? clean : `${clean}-Rev${revNum}`;
+  }
+
+  function buildProposedCaseSelective(baseCase, proposal, selectedDocIds) {
+    const next = deepClone(baseCase);
+    const revs = ensureDocRevisions(next);
+    const selected = new Set(selectedDocIds || []);
+
+    const q = next.doc_chain.quotation;
+    const po = next.doc_chain.purchase_order;
+    const di = next.doc_chain.delivery_inspection;
+    const ap = next.doc_chain.expense_approval;
+    const idx = proposal.target_item_index || 0;
+
+    const oldQty = q.items[idx]?.qty ?? 1;
+    const oldPrice = q.items[idx]?.unit_price ?? 0;
+    const oldDue = po.due_date || "2026-12-20";
+    const oldLoc = next.delivery_location || di.delivery_location || "";
+    const oldPm = next.pm_name || "이준호";
+
+    const qtyChanged = proposal.new_qty !== oldQty;
+    const dueChanged = proposal.new_due_date !== oldDue;
+    const locChanged = Boolean(proposal.new_location && proposal.new_location !== oldLoc);
+    const pmChanged = Boolean(proposal.new_pm && proposal.new_pm !== oldPm);
+    const shortVal = proposal.delivery_shortage || 0;
+
+    if (selected.has("quotation") && q.items[idx]) {
+      q.items[idx].qty = Math.max(1, parseInt(proposal.new_qty, 10) || oldQty);
+      q.items[idx].unit_price = Math.max(0, parseInt(proposal.new_unit_price, 10) || oldPrice);
+      q.items[idx].supply_amount = q.items[idx].qty * q.items[idx].unit_price;
+      const totalSupply = q.items.reduce((acc, it) => acc + it.qty * it.unit_price, 0);
+      q.total_supply = totalSupply;
+      q.vat = Math.round(totalSupply * 0.1);
+      q.grand_total = totalSupply + q.vat;
+
+      revs.quotation = (revs.quotation || 1) + 1;
+      q.doc_no = addRevisionSuffix(q.doc_no, revs.quotation);
+      q.notes = `[Rev.${revs.quotation} 변경반영: ${proposal.reason_summary}] ${String(q.notes || "").replace(/^\[Rev\.\d+[^\]]*\]\s*/, "")}`;
+    }
+
+    if (selected.has("purchase_order")) {
+      if (po.items[idx] && qtyChanged) {
+        po.items[idx].qty = Math.max(1, parseInt(proposal.new_qty, 10) || po.items[idx].qty);
+      }
+      if (dueChanged) {
+        po.due_date = proposal.new_due_date;
+      }
+      if (locChanged) {
+        po.instructions = `[납품처 변경: ${proposal.new_location}] ${String(po.instructions || "").replace(/^\[납품처 변경:[^\]]*\]\s*/, "")}`;
+      }
+      revs.purchase_order = (revs.purchase_order || 1) + 1;
+      po.doc_no = addRevisionSuffix(po.doc_no, revs.purchase_order);
+    }
+
+    if (selected.has("delivery_inspection")) {
+      next.shortage_qty = shortVal;
+      if (di.items[idx]) {
+        if (qtyChanged) {
+          di.items[idx].ordered_qty = Math.max(1, parseInt(proposal.new_qty, 10) || di.items[idx].ordered_qty);
+        }
+        const ord = di.items[idx].ordered_qty;
+        const deliv = Math.max(0, ord - shortVal);
+        di.items[idx].delivered_qty = deliv;
+        di.items[idx].passed_qty = deliv;
+        di.items[idx].result = deliv === ord ? "적합" : "수량불일치(보류)";
+      }
+      if (dueChanged) {
+        di.delivery_date = shiftIsoDate(proposal.new_due_date, -2);
+      }
+      if (locChanged) {
+        di.delivery_location = proposal.new_location;
+        next.delivery_location = proposal.new_location;
+      }
+      if (shortVal > 0) {
+        di.inspector_note = `[검수 보류 알림] 1번 품목 ${shortVal}개 부족 납품 확인 — 잔여분 재납품 후 최종 합격 처리 요망.`;
+      }
+      revs.delivery_inspection = (revs.delivery_inspection || 1) + 1;
+      di.doc_no = addRevisionSuffix(di.doc_no, revs.delivery_inspection);
+    }
+
+    if (selected.has("expense_approval")) {
+      ap.total_supply = q.total_supply;
+      ap.vat = q.vat;
+      ap.grand_total = q.grand_total;
+      revs.expense_approval = (revs.expense_approval || 1) + 1;
+      ap.doc_no = addRevisionSuffix(ap.doc_no, revs.expense_approval);
+    }
+
+    if (selected.has("form_company_staff")) {
+      if (pmChanged) next.pm_name = proposal.new_pm;
+      revs.form_company_staff = (revs.form_company_staff || 1) + 1;
+    }
+
+    if (selected.has("form_project_plan")) {
+      if (pmChanged) next.pm_name = proposal.new_pm;
+      if (locChanged) next.delivery_location = proposal.new_location;
+      revs.form_project_plan = (revs.form_project_plan || 1) + 1;
+    }
+
+    next.doc_revisions = revs;
+    next.revision = Math.max(...Object.values(revs));
+    next.last_change_summary = proposal.reason_summary;
+    recalcCaseTotals(next, { syncFromQuotation: false });
+    return next;
+  }
+
+  function buildReplyEmailDraft(baseCase, afterCase, proposal, selectedDocIds) {
+    const selected = new Set(selectedDocIds || []);
+    const oldRevs = ensureDocRevisions(baseCase);
+    const newRevs = ensureDocRevisions(afterCase);
     const qOld = baseCase.doc_chain.quotation;
     const qNew = afterCase.doc_chain.quotation;
     const poNew = afterCase.doc_chain.purchase_order;
@@ -1033,22 +1588,28 @@
     const idx = proposal.target_item_index || 0;
     const itemOld = qOld.items[idx] || qOld.items[0];
     const itemNew = qNew.items[idx] || qNew.items[0];
-    const nextRev = (baseCase.revision || 1) + 1;
     const deltaTotal = qNew.grand_total - qOld.grand_total;
 
+    const revisedList = DOC_REGISTRY.filter((d) => selected.has(d.id)).map(
+      (d) => `${d.name} (Rev.${oldRevs[d.id] || 1}→Rev.${newRevs[d.id] || 1})`
+    );
+    const keptList = DOC_REGISTRY.filter((d) => !selected.has(d.id)).map(
+      (d) => `${d.name} (Rev.${oldRevs[d.id] || 1} 유지)`
+    );
+
     const lines = [
-      `제목: [변경확인 · Rev.${nextRev}] ${qNew.project_name} (${qNew.doc_no}) 변경 반영 안내`,
+      `제목: [선별 개정확인] ${qNew.project_name} (${qNew.doc_no}) 변경 요청 검토 회신`,
       `수신: ${qNew.recipient} 담당자님`,
       `발신: ${companyProfile.name} ${companyProfile.contact} (${companyProfile.phone})`,
       "",
       `안녕하십니까, ${companyProfile.name} ${companyProfile.contact}입니다.`,
-      `요청 주신 변경 사항을 당사 4종 관리 서식(견적서·발주/작업지시서·납품검수조서·지출결의서)에 일괄 대조한 결과(Rev.${nextRev})를 아래와 같이 회신드립니다.`,
+      `요청 주신 사항에 대해 전체 6종 관리 서류의 영향도를 판별하여, 변경이 필요한 ${revisedList.length}종 서류만 선별 개정하고 무관한 ${keptList.length}종은 원안을 유지하여 회신드립니다.`,
       "",
-      `1. 변경 핵심 내역 (${idx + 1}번 품목: ${itemNew.name})`,
+      `1. 변경 핵심 내역`,
     ];
 
     if (itemOld.qty !== itemNew.qty) {
-      lines.push(` - 계약 수량: ${num(itemOld.qty)}${itemOld.unit} → ${num(itemNew.qty)}${itemNew.unit} (${itemNew.qty > itemOld.qty ? "+" : ""}${num(itemNew.qty - itemOld.qty)}${itemOld.unit})`);
+      lines.push(` - 계약 수량 (${idx + 1}번 품목): ${num(itemOld.qty)}${itemOld.unit} → ${num(itemNew.qty)}${itemNew.unit} (${itemNew.qty > itemOld.qty ? "+" : ""}${num(itemNew.qty - itemOld.qty)}${itemOld.unit})`);
     }
     if (itemOld.unit_price !== itemNew.unit_price) {
       lines.push(` - 품목 단가: ${won(itemOld.unit_price)} → ${won(itemNew.unit_price)}`);
@@ -1056,19 +1617,37 @@
     if ((baseCase.doc_chain.purchase_order.due_date || "-") !== (poNew.due_date || "-")) {
       lines.push(` - 납품 기한: ${baseCase.doc_chain.purchase_order.due_date} → ${poNew.due_date} (검수 예정일: ${diNew.delivery_date})`);
     }
-    if ((proposal.delivery_shortage || 0) > 0) {
+    const oldLoc = baseCase.delivery_location || baseCase.doc_chain.delivery_inspection?.delivery_location || "-";
+    const newLoc = afterCase.delivery_location || diNew.delivery_location || "-";
+    if (oldLoc !== newLoc) {
+      lines.push(` - 납품·설치 장소: ${oldLoc} → ${newLoc}`);
+    }
+    if ((baseCase.pm_name || "-") !== (afterCase.pm_name || "-")) {
+      lines.push(` - 총괄책임자(PM): ${baseCase.pm_name} → ${afterCase.pm_name}`);
+    }
+    if ((proposal.delivery_shortage || 0) > 0 && selected.has("delivery_inspection")) {
       const deliv = diNew.items[idx]?.delivered_qty ?? 0;
       lines.push(` - 납품 검수 알림: 발주 ${num(itemNew.qty)} 대비 실납품 ${num(deliv)} 확인 (${num(proposal.delivery_shortage)}${itemNew.unit} 부족 → '수량불일치(보류)' 판정)`);
-      lines.push(` - 후속 조치: 확인된 수량 우선 검수 후 부족분 ${num(proposal.delivery_shortage)}${itemNew.unit}는 3영업일 내 추가 직송 납품 예정입니다.`);
+      lines.push(` - 후속 조치: 확인 수량 우선 검수 후 부족분 ${num(proposal.delivery_shortage)}${itemNew.unit}는 3영업일 내 추가 직송 예정입니다.`);
     }
 
     lines.push("");
-    lines.push("2. 금액 변동 요약 (부가세 10% 포함)");
-    lines.push(` - 변경 전 총액(Rev.${baseCase.revision || 1}): ${won(qOld.grand_total)} (공급가액 ${won(qOld.total_supply)} + VAT ${won(qOld.vat)})`);
-    lines.push(` - 변경 후 총액(Rev.${nextRev}): ${won(qNew.grand_total)} (공급가액 ${won(qNew.total_supply)} + VAT ${won(qNew.vat)})`);
-    lines.push(` - 총액 증감 차액: ${deltaTotal >= 0 ? "+" : ""}${won(deltaTotal)}`);
+    lines.push("2. 서류별 선별 개정 현황");
+    lines.push(` - 개정(수정) 서류 (${revisedList.length}종): ${revisedList.length ? revisedList.join(", ") : "없음"}`);
+    lines.push(` - 원안 유지 서류 (${keptList.length}종): ${keptList.length ? keptList.join(", ") : "없음"}`);
+
     lines.push("");
-    lines.push(`위 변경내역이 반영된 개정 견적서 및 기관 지정 양식(.hwpx)을 첨부드리오니 확인 후 회신 부탁드립니다.`);
+    if (deltaTotal !== 0) {
+      lines.push("3. 금액 변동 요약 (부가세 10% 포함)");
+      lines.push(` - 변경 전 총액: ${won(qOld.grand_total)} (공급가액 ${won(qOld.total_supply)} + VAT ${won(qOld.vat)})`);
+      lines.push(` - 변경 후 총액: ${won(qNew.grand_total)} (공급가액 ${won(qNew.total_supply)} + VAT ${won(qNew.vat)})`);
+      lines.push(` - 총액 증감 차액: ${deltaTotal >= 0 ? "+" : ""}${won(deltaTotal)}`);
+    } else {
+      lines.push(`3. 금액 변동 요약: 계약 총액 변동 없음 (기존 ${won(qOld.grand_total)} 원안 유지)`);
+    }
+
+    lines.push("");
+    lines.push(`개정 반영된 서류 및 기관 제출용 .hwpx 파일을 첨부드리오니 확인 후 회신 부탁드립니다.`);
     lines.push(`감사합니다.`);
     lines.push("");
     lines.push(`--`);
@@ -1077,48 +1656,53 @@
     return lines.join("\n");
   }
 
-  function addRevisionSuffix(docNo, revNum) {
-    const clean = String(docNo || "DOC-2026").replace(/-Rev\d+$/i, "");
-    return `${clean}-Rev${revNum}`;
+  function renderImpactMatrix(impactRows, selectedDocIds, proposal) {
+    const selected = new Set(selectedDocIds);
+    el("impactMatrixBox").innerHTML = `
+      <table class="meta-table impact-matrix">
+        <thead>
+          <tr>
+            <th style="width: 7%; text-align: center;">선택</th>
+            <th style="width: 11%; text-align: center;">영향 판정</th>
+            <th style="width: 34%;">관리 서류 (6종 레지스트리)</th>
+            <th style="width: 34%;">AI 영향 분석 근거</th>
+            <th style="width: 14%; text-align: center;">버전 변화</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${impactRows
+            .map((row) => {
+              const checked = selected.has(row.id);
+              const nextRev = checked ? row.currentRev + 1 : row.currentRev;
+              return `
+                <tr class="${checked ? "impacted" : "untouched"}">
+                  <td class="center"><input type="checkbox" class="impact-check" data-doc-id="${esc(row.id)}" ${checked ? "checked" : ""} /></td>
+                  <td class="center"><span class="status-tag ${checked ? "fail" : "pass"}">${checked ? "수정 필요" : "유지"}</span></td>
+                  <td><strong>${esc(row.name)}</strong></td>
+                  <td>${esc(row.reason)}</td>
+                  <td class="center mono">${checked ? `Rev.${row.currentRev} → <strong>Rev.${nextRev}</strong>` : `Rev.${row.currentRev} 유지`}</td>
+                </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>`;
+
+    el("impactMatrixBox").querySelectorAll(".impact-check").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        if (!pendingProposal) return;
+        const checkedIds = Array.from(el("impactMatrixBox").querySelectorAll(".impact-check:checked")).map(
+          (node) => node.dataset.docId
+        );
+        pendingProposal.selectedDocIds = checkedIds;
+        pendingProposal.afterCase = buildProposedCaseSelective(activeCase, proposal, checkedIds);
+        renderImpactMatrix(impactRows, checkedIds, proposal);
+        renderChangeDiffAndReply(activeCase, pendingProposal.afterCase, proposal, checkedIds);
+      });
+    });
   }
 
-  function buildProposedCase(baseCase, proposal) {
-    const next = deepClone(baseCase);
-    const nextRev = (baseCase.revision || 1) + 1;
-    next.revision = nextRev;
-    next.shortage_qty = proposal.delivery_shortage || 0;
-    next.last_change_summary = proposal.reason_summary;
-
-    const q = next.doc_chain.quotation;
-    const po = next.doc_chain.purchase_order;
-    const di = next.doc_chain.delivery_inspection;
-    const ap = next.doc_chain.expense_approval;
-
-    const idx = proposal.target_item_index || 0;
-    if (q.items[idx]) {
-      q.items[idx].qty = Math.max(1, parseInt(proposal.new_qty, 10) || q.items[idx].qty);
-      q.items[idx].unit_price = Math.max(0, parseInt(proposal.new_unit_price, 10) || q.items[idx].unit_price);
-    }
-
-    if (proposal.new_due_date && proposal.new_due_date !== po.due_date) {
-      po.due_date = proposal.new_due_date;
-      di.delivery_date = shiftIsoDate(proposal.new_due_date, -2);
-    }
-
-    q.doc_no = addRevisionSuffix(q.doc_no, nextRev);
-    po.doc_no = addRevisionSuffix(po.doc_no, nextRev);
-    di.doc_no = addRevisionSuffix(di.doc_no, nextRev);
-    ap.doc_no = addRevisionSuffix(ap.doc_no, nextRev);
-    q.notes = `[Rev.${nextRev} 변경반영: ${proposal.reason_summary}] ${String(q.notes || "").replace(/^\[Rev\.\d+[^\]]*\]\s*/, "")}`;
-    if ((proposal.delivery_shortage || 0) > 0) {
-      di.inspector_note = `[검수 보류 알림] 1번 품목 ${proposal.delivery_shortage}개 부족 납품 확인 — 잔여분 재납품 후 최종 합격 처리 요망.`;
-    }
-
-    recalcCaseTotals(next);
-    return next;
-  }
-
-  function renderChangeDiffAndReply(baseCase, afterCase, proposal) {
+  function renderChangeDiffAndReply(baseCase, afterCase, proposal, selectedDocIds) {
+    const selected = selectedDocIds || [];
     const qOld = baseCase.doc_chain.quotation;
     const qNew = afterCase.doc_chain.quotation;
     const poOld = baseCase.doc_chain.purchase_order;
@@ -1131,11 +1715,16 @@
 
     const qtyDelta = itNew.qty - itOld.qty;
     const priceDelta = itNew.unit_price - itOld.unit_price;
-    const vatDelta = qNew.vat - qOld.vat;
     const totalDelta = qNew.grand_total - qOld.grand_total;
     const delivOld = diOld.items[idx]?.delivered_qty ?? itOld.qty;
     const delivNew = diNew.items[idx]?.delivered_qty ?? itNew.qty;
     const dueChanged = (poOld.due_date || "-") !== (poNew.due_date || "-");
+    const oldLoc = baseCase.delivery_location || diOld.delivery_location || "-";
+    const newLoc = afterCase.delivery_location || diNew.delivery_location || "-";
+    const locChanged = oldLoc !== newLoc;
+    const pmOld = baseCase.pm_name || "이준호";
+    const pmNew = afterCase.pm_name || "이준호";
+    const pmChanged = pmOld !== pmNew;
     const statusOld = baseCase.cross_check?.overall_status === "PASS" ? "적합(PASS)" : "보류(FAIL)";
     const statusNew = afterCase.cross_check?.overall_status === "PASS" ? "적합(PASS)" : "검수보류(FAIL)";
 
@@ -1155,25 +1744,32 @@
         cls: priceDelta !== 0 ? "changed" : "",
       },
       {
-        field: "납품 기한 (발주서 기준)",
+        field: "납품 기한 (발주서 · 계획서)",
         before: poOld.due_date || "-",
         after: poNew.due_date || "-",
         delta: dueChanged ? "일정 변경 반영" : "변동 없음",
         cls: dueChanged ? "changed" : "",
       },
       {
-        field: "실납품 예정 수량 / 3-Way 판정",
-        before: `${num(delivOld)}${itOld.unit} (${statusOld})`,
-        after: `${num(delivNew)}${itNew.unit} (${statusNew})`,
-        delta: delivNew < itNew.qty ? `${num(itNew.qty - delivNew)}${itNew.unit} 부족(보류)` : "전량 일치",
-        cls: delivNew < itNew.qty ? "deficit" : "",
+        field: "납품 · 설치장소",
+        before: oldLoc,
+        after: newLoc,
+        delta: locChanged ? "장소 변경 반영" : "변동 없음",
+        cls: locChanged ? "changed" : "",
       },
       {
-        field: "부가가치세 (10%)",
-        before: won(qOld.vat),
-        after: won(qNew.vat),
-        delta: vatDelta === 0 ? "변동 없음" : `${vatDelta > 0 ? "+" : ""}${won(vatDelta)}`,
-        cls: vatDelta !== 0 ? "changed" : "",
+        field: "총괄책임자 (PM)",
+        before: pmOld,
+        after: pmNew,
+        delta: pmChanged ? "인력 교체 반영" : "변동 없음",
+        cls: pmChanged ? "changed" : "",
+      },
+      {
+        field: "실납품 수량 / 3-Way 판정",
+        before: `${num(delivOld)}${itOld.unit} (${statusOld})`,
+        after: `${num(delivNew)}${itNew.unit} (${statusNew})`,
+        delta: delivNew < (diNew.items[idx]?.ordered_qty ?? itNew.qty) ? `${num((diNew.items[idx]?.ordered_qty ?? itNew.qty) - delivNew)}${itNew.unit} 부족(보류)` : "전량 일치",
+        cls: delivNew < (diNew.items[idx]?.ordered_qty ?? itNew.qty) ? "deficit" : "",
       },
       {
         field: "총 합계금액 (VAT 포함)",
@@ -1188,10 +1784,10 @@
       <table class="meta-table diff-table">
         <thead>
           <tr>
-            <th style="width: 34%;">대조 항목</th>
-            <th style="width: 22%;">변경 전 (Rev.${baseCase.revision || 1})</th>
-            <th style="width: 22%;">변경 후 (Rev.${afterCase.revision})</th>
-            <th style="width: 22%;">증감 · 판정</th>
+            <th style="width: 31%;">대조 항목</th>
+            <th style="width: 23%;">변경 전</th>
+            <th style="width: 23%;">변경 후 (선택 반영)</th>
+            <th style="width: 23%;">증감 · 판정</th>
           </tr>
         </thead>
         <tbody>
@@ -1209,11 +1805,13 @@
         </tbody>
       </table>`;
 
-    el("replyDraftBox").textContent = buildReplyEmailDraft(baseCase, afterCase, proposal);
-    el("applyChangeBtn").disabled = false;
+    el("replyDraftBox").textContent = buildReplyEmailDraft(baseCase, afterCase, proposal, selected);
+    el("applyChangeBtn").disabled = selected.length === 0;
+    el("applyChangeBtn").textContent =
+      selected.length === 0 ? "선택된 서류 없음" : `선택된 ${selected.length}개 서류만 개정 반영`;
     el("copyReplyBtn").disabled = false;
     el("changeStatusLine").style.color = "var(--navy)";
-    el("changeStatusLine").textContent = `[분석 완료 · ${proposal.used_live_llm ? "BAZE LLM" : "한국어 변경 파서"}] ${proposal.reason_summary} — 아래 [4종 서식(Rev.${afterCase.revision})에 일괄 반영]을 누르면 문서에 즉시 적용됩니다.`;
+    el("changeStatusLine").textContent = `[영향 판별 완료 · ${proposal.used_live_llm ? "BAZE LLM" : "규칙·문맥 분석"}] ${proposal.reason_summary} → 6종 중 ${selected.length}종 개정 대상 (${6 - selected.length}종은 Rev.1 유지)`;
   }
 
   async function analyzeChangeRequestText() {
@@ -1227,7 +1825,7 @@
 
     const status = el("changeStatusLine");
     status.style.color = "var(--navy)";
-    status.textContent = "변경요청 내용 파싱 및 기존 문서 대조(Diff) 계산 중...";
+    status.textContent = "변경요청 내용 파싱 및 6종 서류 영향도(Impact Analysis) 분석 중...";
 
     let proposal = null;
     const key = (el("liveApiKey")?.value || "").trim();
@@ -1242,9 +1840,29 @@
       proposal = parseKoreanChangeRules(text, activeCase);
     }
 
-    const afterCase = buildProposedCase(activeCase, proposal);
-    pendingProposal = { proposal, afterCase };
-    renderChangeDiffAndReply(activeCase, afterCase, proposal);
+    const impactRows = computeImpactMatrix(activeCase, proposal);
+    const selectedDocIds = impactRows.filter((r) => r.impacted).map((r) => r.id);
+    const afterCase = buildProposedCaseSelective(activeCase, proposal, selectedDocIds);
+    pendingProposal = { proposal, impactRows, selectedDocIds, afterCase };
+
+    renderImpactMatrix(impactRows, selectedDocIds, proposal);
+    renderChangeDiffAndReply(activeCase, afterCase, proposal, selectedDocIds);
+  }
+
+  async function loadPresetHwpxIntoWorkbench(templateFile, downloadSuffix) {
+    if (!activeCase) return;
+    const status = el("templateStatusLine");
+    status.style.color = "var(--navy)";
+    status.textContent = `기관 양식(${templateFile}) 구조 스캔 중...`;
+    try {
+      const resp = await fetch(`templates/${templateFile}?v=${ASSET_VER}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const buf = await resp.arrayBuffer();
+      await openFormWorkbenchFromBuffer(buf, `${activeCase.id}_${downloadSuffix}.hwpx`);
+    } catch (err) {
+      status.style.color = "var(--fail)";
+      status.textContent = `[오류] 양식 로드 실패: ${err.message}`;
+    }
   }
 
   function bindEvents() {
@@ -1261,34 +1879,49 @@
       });
     });
 
-    // Registered Company Profile inputs (live binding + localStorage persistence)
-    ["profName", "profBizNo", "profCeo", "profContact", "profAddr", "profPhone", "profCerts", "profBank"].forEach(
-      (id) => {
-        el(id)?.addEventListener("input", () => {
-          readProfileInputs();
-          if (activeCase) {
-            applyProfileToCase(activeCase);
-            renderSheet(activeCase);
-            if (pendingProposal) {
-              applyProfileToCase(pendingProposal.afterCase);
-              el("replyDraftBox").textContent = buildReplyEmailDraft(
-                activeCase,
-                pendingProposal.afterCase,
-                pendingProposal.proposal
-              );
-            }
+    // Registered Company Knowledge Base inputs (live binding + localStorage persistence)
+    [
+      "profName",
+      "profBizNo",
+      "profCeo",
+      "profContact",
+      "profAddr",
+      "profPhone",
+      "profCerts",
+      "profBank",
+      "profEstRev",
+      "profCapability",
+      "profStaff",
+      "profTrackRecord",
+    ].forEach((id) => {
+      el(id)?.addEventListener("input", () => {
+        readProfileInputs();
+        if (activeCase) {
+          applyProfileToCase(activeCase);
+          renderSheet(activeCase);
+          refreshOpenWorkbenchIfVisible();
+          if (pendingProposal) {
+            applyProfileToCase(pendingProposal.afterCase);
+            el("replyDraftBox").textContent = buildReplyEmailDraft(
+              activeCase,
+              pendingProposal.afterCase,
+              pendingProposal.proposal,
+              pendingProposal.selectedDocIds
+            );
           }
-        });
-      }
-    );
+        }
+      });
+    });
 
     el("resetProfileBtn")?.addEventListener("click", () => {
       companyProfile = { ...DEFAULT_PROFILE };
       syncProfileInputs();
       saveProfile();
       if (activeCase) {
+        activeCase.pm_name = parseStaffRows(companyProfile.staff_text)[0]?.name || "이준호";
         applyProfileToCase(activeCase);
         renderSheet(activeCase);
+        refreshOpenWorkbenchIfVisible();
       }
     });
 
@@ -1315,6 +1948,7 @@
       recalcCaseTotals(activeCase);
       renderCrossCheck(activeCase);
       renderSheet(activeCase);
+      refreshOpenWorkbenchIfVisible();
     };
     el("liveQtyInput").addEventListener("input", onSotChange);
     el("livePriceInput").addEventListener("input", onSotChange);
@@ -1334,45 +1968,60 @@
     el("downloadJsonBtn").addEventListener("click", () => {
       if (!activeCase) return;
       const blob = new Blob([JSON.stringify(activeCase, null, 2)], { type: "application/json" });
-      triggerDownloadBlob(blob, `${activeCase.id}_Rev${activeCase.revision || 1}_4docs.json`);
+      triggerDownloadBlob(blob, `${activeCase.id}_Rev${activeCase.revision || 1}_managed6.json`);
     });
 
-    // Built-in HWPX Template Auto-Fill
-    el("downloadFilledHwpxBtn")?.addEventListener("click", async () => {
-      if (!activeCase) return;
-      const status = el("templateStatusLine");
-      status.style.color = "var(--navy)";
-      status.textContent = "기관 지정 .hwpx 양식 불러오는 중...";
-      try {
-        const resp = await fetch("templates/standard_quote_submit_template.hwpx");
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const buf = await resp.arrayBuffer();
-        await fillAndDownloadTemplate(
-          buf,
-          `${activeCase.id}_Rev${activeCase.revision || 1}_지정양식.hwpx`
-        );
-      } catch (err) {
-        status.style.color = "var(--fail)";
-        status.textContent = `[오류] 기본 양식 로드 실패: ${err.message}`;
-      }
+    // Preset Institutional HWPX Form Workbench Buttons
+    el("presetFormQuoteBtn")?.addEventListener("click", () => {
+      const revs = activeCase ? ensureDocRevisions(activeCase) : { quotation: 1 };
+      loadPresetHwpxIntoWorkbench("standard_quote_submit_template.hwpx", `Rev${revs.quotation}_견적제출양식`);
+    });
+    el("presetFormStaffBtn")?.addEventListener("click", () => {
+      const revs = activeCase ? ensureDocRevisions(activeCase) : { form_company_staff: 1 };
+      loadPresetHwpxIntoWorkbench("agency_company_staff_template.hwpx", `Rev${revs.form_company_staff}_업체일반현황_인력표`);
+    });
+    el("presetFormPlanBtn")?.addEventListener("click", () => {
+      const revs = activeCase ? ensureDocRevisions(activeCase) : { form_project_plan: 1 };
+      loadPresetHwpxIntoWorkbench("agency_project_plan_template.hwpx", `Rev${revs.form_project_plan}_사업수행계획서`);
     });
 
-    // User Custom HWPX Template Upload & Auto-Fill
+    // User Custom HWPX Template Upload & Structural Slot Analysis
     const cti = el("customTemplateInput");
     el("uploadCustomTemplateBtn")?.addEventListener("click", () => cti?.click());
     cti?.addEventListener("change", async (e) => {
       const f = e.target.files?.[0];
       if (!f) return;
       const buf = await f.arrayBuffer();
-      await fillAndDownloadTemplate(buf, `filled_${f.name}`);
+      await openFormWorkbenchFromBuffer(buf, `filled_${f.name}`);
       cti.value = "";
+    });
+
+    el("downloadAnalyzedHwpxBtn")?.addEventListener("click", async () => {
+      if (!activeFormBuffer || !activeFormPlan) return;
+      const status = el("templateStatusLine");
+      try {
+        const res = await window.HwpBrowserParser.applySlotPlanToHwpx(
+          activeFormBuffer,
+          activeFormPlan.slots
+        );
+        triggerDownloadBlob(res.blob, activeFormFilename);
+        status.style.color = "var(--navy)";
+        status.textContent = `[다운로드 완료] '${activeFormFilename}' 저장 완료 (${res.filledCount}개 항목/빈 칸 기입 반영)`;
+      } catch (err) {
+        status.style.color = "var(--fail)";
+        status.textContent = `[오류] HWPX 저장 실패: ${err.message}`;
+      }
+    });
+
+    el("closeWorkbenchBtn")?.addEventListener("click", () => {
+      el("formWorkbenchPreview")?.classList.add("hidden");
     });
 
     el("downloadErpCsvBtn")?.addEventListener("click", () => {
       if (activeCase) exportErpCsv(activeCase);
     });
 
-    // Step 04 Scenario Presets & Change Analysis
+    // Step 04 Scenario Presets (4 selective scenarios) & Impact Analysis
     document.querySelectorAll(".scenario-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (!activeCase) return;
@@ -1381,13 +2030,18 @@
         const sc = btn.dataset.scenario;
         if (sc === "qty_due") {
           el("changeRequestInput").value =
-            `담당자님, ${activeCase.doc_chain.quotation.project_name} 건에서 1번 품목(${first.name}) 납품 수량을 100개에서 120개로 변경하고, 납기는 기존(${due}) 대비 7일 연장해 주세요. 수정된 견적·발주 내역과 회신 부탁드립니다.`;
-        } else if (sc === "price_discount") {
+            `담당자님, ${activeCase.doc_chain.quotation.project_name} 건에서 1번 품목(${first.name}) 납품 수량을 100개에서 120개로 변경하고, 납기는 기존(${due}) 대비 7일 연장해 주세요. 견적·발주·납품·품의·수행계획서 반영 후 회신 부탁드립니다.`;
+        } else if (sc === "due_location") {
           el("changeRequestInput").value =
-            `발주 협의 결과 1번 품목(${first.name}) 수량을 2개 추가(+2개 증량)하는 조건으로 단가 5% 할인 적용 부탁드립니다. 변경 총액 확인 후 회신 바랍니다.`;
+            `발주기관 연구실 요청입니다. 시험실 공사 일정으로 납기를 기존(${due}) 대비 10일 연장해 주시고, 납품장소는 기존 위치에서 '제2연구동 1층 계측기 반입구'로 변경 부탁드립니다. 계약 수량·단가(총액) 및 참여인력은 변동 없습니다.`;
+        } else if (sc === "pm_change") {
+          const oldPm = activeCase.pm_name || "이준호";
+          const nextPm = oldPm === "박서연" ? "이준호" : "박서연";
+          el("changeRequestInput").value =
+            `발주처 협의에 따라 본 과업의 총괄책임자(PM)를 기존 ${oldPm} 수석에서 ${nextPm} 책임연구원으로 교체하고자 합니다. 견적 금액·수량·납기 일정에는 변동이 없으니 인력현황표와 사업수행계획서만 개정해 주세요.`;
         } else if (sc === "short_delivery") {
           el("changeRequestInput").value =
-            `현장 물류 출고 확인 결과 금일 1번 품목(${first.name})이 1개 부족 납품될 예정입니다. 검수조서 보류 처리 및 잔여분 재납품 일정 회신 요청드립니다.`;
+            `현장 물류 출고 확인 결과 금일 1번 품목(${first.name})이 1개 부족 납품될 예정입니다. 견적·발주 수량은 유지하고 납품검수조서만 보류 처리 및 잔여분 재납품 일정 회신 요청드립니다.`;
         }
         analyzeChangeRequestText();
       });
@@ -1397,14 +2051,15 @@
 
     el("applyChangeBtn")?.addEventListener("click", () => {
       if (!pendingProposal || !pendingProposal.afterCase) return;
+      const count = (pendingProposal.selectedDocIds || []).length;
       activeCase = deepClone(pendingProposal.afterCase);
-      recalcCaseTotals(activeCase);
       renderAll();
+      refreshOpenWorkbenchIfVisible();
       el("applyChangeBtn").disabled = true;
       el("revertRevBtn").disabled = false;
       el("changeStatusLine").style.color = "var(--navy)";
       el("changeStatusLine").textContent =
-        `[반영 완료] 4종 행정서식이 Rev.${activeCase.revision}로 일괄 업데이트되었습니다. 상단 Step 03 견적·발주·검수조서·품의서와 HWPX 다운로드를 확인하세요.`;
+        `[선별 반영 완료] 선택된 ${count}종 서류만 개정되고 나머지 ${6 - count}종은 Rev.1을 유지했습니다. Step 03 탭 버전과 기관 양식(.hwpx)을 확인하세요.`;
     });
 
     el("revertRevBtn")?.addEventListener("click", () => {
@@ -1413,7 +2068,8 @@
       recalcCaseTotals(activeCase);
       resetChangeRequestPanel();
       renderAll();
-      el("changeStatusLine").textContent = "[복원] 최초 기안 상태(Rev.1)로 되돌렸습니다.";
+      refreshOpenWorkbenchIfVisible();
+      el("changeStatusLine").textContent = "[복원] 관리 대상 6종 서류 모두 최초 기안 상태(Rev.1)로 되돌렸습니다.";
     });
 
     el("copyReplyBtn")?.addEventListener("click", async () => {

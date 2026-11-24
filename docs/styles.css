@@ -886,18 +886,51 @@ tr.row-fail td {
   background: var(--surface-sub);
 }
 
-.profile-field input:focus {
+.profile-field input:focus,
+.profile-field textarea:focus {
   outline: none;
   border-color: var(--ink);
   background: var(--surface);
 }
 
-/* Template Export Bar inside Step 03 */
+.profile-divider {
+  margin: 12px 0 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-strong);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.profile-extended-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.profile-field textarea {
+  width: 100%;
+  min-height: 66px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface-sub);
+  resize: vertical;
+}
+
+/* Template Export & Universal Form Workbench Bar inside Step 03 */
 .template-bar {
   margin-top: 16px;
   background: var(--surface-sub);
   border: 1px solid var(--line-strong);
-  padding: 12px 14px;
+  padding: 14px 16px;
+}
+
+.template-bar-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -910,6 +943,133 @@ tr.row-fail td {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  margin-top: 10px;
+}
+
+.workbench-preview {
+  margin-top: 14px;
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  padding: 14px 16px;
+}
+
+.workbench-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 10px;
+}
+
+.slot-map-wrap {
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+}
+
+.slot-map-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.slot-map-table th,
+.slot-map-table td {
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 6px 9px;
+  vertical-align: middle;
+}
+
+.slot-map-table th {
+  position: sticky;
+  top: 0;
+  background: #f3f4f6;
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: left;
+  z-index: 1;
+}
+
+.slot-input {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--surface-sub);
+}
+
+.slot-input:focus {
+  outline: none;
+  border-color: var(--navy);
+  background: var(--surface);
+}
+
+.source-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sub);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.source-tag.company {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: var(--navy);
+}
+
+.source-tag.ai {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.source-tag.manual {
+  border-color: #fcd34d;
+  background: #fffbeb;
+  color: var(--warn);
+}
+
+.impact-matrix {
+  margin-bottom: 16px;
+}
+
+.impact-matrix tr.impacted td {
+  background: #eff6ff;
+}
+
+.impact-matrix tr.untouched td {
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.rev-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 0 5px;
+  margin-left: 4px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-sub);
+  color: var(--muted);
+}
+
+.rev-pill.updated {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: #ffffff;
 }
 
 /* Step 04: Change Request Diff & Auto Reply */
@@ -1002,7 +1162,8 @@ tr.row-fail td {
     flex-direction: column;
   }
   .corpus-grid,
-  .profile-grid {
+  .profile-grid,
+  .profile-extended-grid {
     grid-template-columns: 1fr;
   }
   .a4-sheet {
@@ -1028,7 +1189,8 @@ tr.row-fail td {
   .sot-bar,
   .check-table,
   .doc-toolbar,
-  .template-bar {
+  .template-bar,
+  .workbench-preview {
     display: none !important;
   }
   .card {
