@@ -1,7 +1,7 @@
 (function () {
   const BAZE_ENDPOINT = "https://factchat-cloud.mindlogic.ai/v1/gateway/chat/completions";
   const BAZE_MODEL = "gpt-6.1-terra";
-  const ASSET_VER = "20261124c";
+  const ASSET_VER = "20261124d";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -1457,14 +1457,14 @@
     };
 
     return DOC_REGISTRY.map((meta) => {
-      const currRev = revs[meta.id] || 1;
+      const currentRev = revs[meta.id] || 1;
       const impacted = Boolean(impactedMap[meta.id]);
       return {
         ...meta,
         impacted,
         reason: reasons[meta.id],
         currentRev,
-        nextRev: impacted ? currRev + 1 : currRev,
+        nextRev: impacted ? currentRev + 1 : currentRev,
       };
     });
   }
