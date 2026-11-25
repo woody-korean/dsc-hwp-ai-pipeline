@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>쉬운 시연 보기 | 충남대 B팀 중소기업 한글 행정 AI 도우미</title>
+  <link rel="stylesheet" href="easy.css?v=20261125b" />
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cfb@1.2.2/cfb.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+</head>
+<body>
+  <div class="easy-wrap">
+    <!-- Top Mode Switcher -->
+    <header class="top-mode-bar">
+      <div class="team-label">충남대 B팀 (신수하 · 김우형) · 2026 DSC 공유대학 AI 실전 프로젝트 과제 4</div>
+      <div class="top-mode-actions">
+        <span class="mode-pill-active">✨ 한눈에 보는 쉬운 시연</span>
+        <a href="충남대B팀_과제4_HWP_AI_행정자동화_발표자료.pdf" target="_blank" rel="noopener" class="easy-link-btn">발표자료 PDF</a>
+        <a href="index.html" class="switch-link-btn">🔬 전문가 · 기술/보안 검증 화면 →</a>
+      </div>
+    </header>
+
+    <!-- Hero Story Card -->
+    <section class="hero-card">
+      <span class="hero-kicker">비전공자 · 중소기업 실무자를 위한 4단계 라이브 체험</span>
+      <h1>공공기관 한글(.hwp) 공고가 와도, 복붙 없이 4분 만에 서류 작성부터 수정·답장까지 끝냅니다</h1>
+      <p class="hero-desc">
+        대전 대덕산단 정밀제조 중소기업 <strong>(주)대덕정밀기계 이행정 대리</strong>가 연구원·방위사업청의 한글 공고를 받아
+        서류를 제출하고, 거래처 수정 요청까지 처리하는 실제 하루 업무를 그대로 체험해 보세요.
+      </p>
+
+      <div class="before-after-strip">
+        <div class="ba-box ba-before">
+          <div class="ba-tag">기존 방식 (사람이 직접 복붙)</div>
+          <div class="ba-main">평균 1시간 45분 (105분) 소요</div>
+          <div class="ba-sub">한글 공고 읽고 견적·발주·양식 4~6번 다시 타이핑 + 수량 오타 위험</div>
+        </div>
+        <div class="ba-arrow">→</div>
+        <div class="ba-box ba-after">
+          <div class="ba-tag">AI 도우미 활용 후</div>
+          <div class="ba-main">최종 검토 포함 단 4분 (96% 단축)</div>
+          <div class="ba-sub">빈칸 자동 기입 + 금액 오차 0원 + 바뀐 서류만 골라 1클릭 수정·답장</div>
+        </div>
+      </div>
+
+      <div class="trust-badges">
+        <span class="trust-badge">✅ 한글(.hwpx) 표·양식 깨짐 0%</span>
+        <span class="trust-badge">✅ 금액·부가세(10%) 자동 검산 (오차 0원)</span>
+        <span class="trust-badge">✅ 회사 기밀은 사내 보안 AI로 유출 차단</span>
+      </div>
+
+      <details id="easyProfileDrawer" class="company-drawer">
+        <summary>
+          <span>🏢 처음 한 번만 등록해 둔 우리 회사 정보 (모든 양식에 자동 입력됨)</span>
+          <span id="easyProfilePreview" class="company-preview-txt">(주)대덕정밀기계 · 대표 김대전 · 클릭해 수정</span>
+        </summary>
+        <div class="company-form-grid">
+          <div class="field-item"><label for="eProfName">회사명</label><input id="eProfName" type="text" /></div>
+          <div class="field-item"><label for="eProfBizNo">사업자번호</label><input id="eProfBizNo" type="text" /></div>
+          <div class="field-item"><label for="eProfCeo">대표자명</label><input id="eProfCeo" type="text" /></div>
+          <div class="field-item"><label for="eProfContact">담당자 / 직급</label><input id="eProfContact" type="text" /></div>
+          <div class="field-item"><label for="eProfPhone">연락처 / 이메일</label><input id="eProfPhone" type="text" /></div>
+          <div class="field-item"><label for="eProfAddr">회사 주소</label><input id="eProfAddr" type="text" /></div>
+        </div>
+        <div class="company-form-grid-wide">
+          <div class="field-item">
+            <label for="eProfStaff">참여 인력 목록 (이름 | 직급 | 역할 | 경력)</label>
+            <textarea id="eProfStaff"></textarea>
+          </div>
+          <div class="field-item">
+            <label for="eProfTrack">주요 납품 실적 (발주처 | 사업명 | 기간 | 금액)</label>
+            <textarea id="eProfTrack"></textarea>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- STEP 1 -->
+    <section id="step1Card" class="step-card">
+      <div class="step-head">
+        <div>
+          <span class="step-pill">STEP 1 · 공고문 이해하기</span>
+          <h2>"무슨 사업이고, 뭘 준비해서 내야 하지?"</h2>
+          <p class="step-sub">어려운 한글(.hwp/.hwpx) 공고문을 올리면 AI가 사업 요약·준비물·주의사항 3가지로 정리해 줍니다.</p>
+        </div>
+      </div>
+
+      <div class="choice-row">
+        <button type="button" class="ebtn case-btn active" data-case-id="kriss_gpu_workstation_spec">① 대전 출연연 사례: 한국표준과학연구원(KRISS) 서버 구매</button>
+        <button type="button" class="ebtn case-btn" data-case-id="dapa_uav_bid">② 방산 사례: 방위사업청 무인정찰기 부품 입찰</button>
+        <button type="button" class="ebtn case-btn" data-case-id="dapa_tactical_relay_bid">③ 재공고 사례: 방위사업청 전술이동중계기 입찰</button>
+        <button id="easyNoticeUploadBtn" type="button" class="ebtn">📂 내 한글(.hwp/.hwpx) 공고 올리기</button>
+        <input id="easyNoticeInput" type="file" accept=".hwp,.hwpx" class="hidden" />
+      </div>
+      <div id="easyNoticeStatus" class="status-msg" style="margin-bottom: 10px;"></div>
+
+      <div id="easySummaryCards" class="summary-cards-3"></div>
+    </section>
+
+    <!-- STEP 2 -->
+    <section id="step2Card" class="step-card">
+      <div class="step-head">
+        <div>
+          <span class="step-pill">STEP 2 · 서류 자동 채우기</span>
+          <h2>"기관마다 양식이 달라도, 빈칸만 찾아서 쏙쏙 채워줍니다!"</h2>
+          <p class="step-sub">아무 한글 양식(.hwpx)이나 고르시면 등록된 회사 정보와 공고 내용을 빈칸에 자동으로 써넣고, 엑셀용 파일도 같이 만듭니다.</p>
+        </div>
+      </div>
+
+      <div class="choice-row">
+        <button id="easyFormKimmBtn" type="button" class="ebtn active">① 한국기계연구원(KIMM) 수의계약 확인서 (실물)</button>
+        <button id="easyFormStaffBtn" type="button" class="ebtn">② 업체 일반현황 · 참여인력표 <span id="easyRevStaff" class="mini-rev">Rev.1</span></button>
+        <button id="easyFormPlanBtn" type="button" class="ebtn">③ 사업수행계획서 요약본 <span id="easyRevPlan" class="mini-rev">Rev.1</span></button>
+        <button id="easyFormBasic4Btn" type="button" class="ebtn">④ 사내 기본 4종 서류 보기 (견적·발주·검수·품의)</button>
+        <button id="easyCustomFormBtn" type="button" class="ebtn">+ 다른 한글(.hwpx) 빈 양식 넣어보기</button>
+        <input id="easyCustomFormInput" type="file" accept=".hwpx" class="hidden" />
+      </div>
+
+      <!-- HWPX Universal Filler View -->
+      <div id="easyHwpxPanel">
+        <div class="form-status-header">
+          <div id="easyFormTitle" class="form-title-badge">양식을 불러오는 중입니다...</div>
+        </div>
+        <div id="easyHumanSafetyNotice" class="safety-callout hidden"></div>
+        <div id="easySlotTableWrap" class="slot-table-box"></div>
+        <div class="download-bar">
+          <button id="easyDownloadHwpxBtn" type="button" class="ebtn ebtn-primary">📥 완성된 한글 파일(.hwpx) 바로 받기</button>
+          <button id="easyDownloadCsvBtn" type="button" class="ebtn ebtn-green">📊 엑셀 · ERP 등록용 표(.csv) 받기</button>
+          <span id="easyFormStatus" class="status-msg"></span>
+        </div>
+      </div>
+
+      <!-- Basic 4 Docs A4 Preview -->
+      <div id="easyBasic4Panel" class="hidden">
+        <div class="basic4-bar">
+          <div class="choice-row" style="margin-bottom: 0;">
+            <button type="button" class="ebtn b4-tab active" data-doc="quotation">표준 견적서 <span id="eTabRev_quotation" class="mini-rev">Rev.1</span></button>
+            <button type="button" class="ebtn b4-tab" data-doc="purchase_order">발주·작업지시서 <span id="eTabRev_purchase_order" class="mini-rev">Rev.1</span></button>
+            <button type="button" class="ebtn b4-tab" data-doc="delivery_inspection">납품검수조서 <span id="eTabRev_delivery_inspection" class="mini-rev">Rev.1</span></button>
+            <button type="button" class="ebtn b4-tab" data-doc="expense_approval">지출품의서 <span id="eTabRev_expense_approval" class="mini-rev">Rev.1</span></button>
+          </div>
+          <button id="easyPrintBtn" type="button" class="ebtn ebtn-primary">🖨️ A4 인쇄 / PDF 저장</button>
+        </div>
+        <div id="easyA4Sheet" class="a4-preview"></div>
+      </div>
+    </section>
+
+    <!-- STEP 3 -->
+    <section id="step3Card" class="step-card">
+      <div class="step-head">
+        <div>
+          <span class="step-pill">STEP 3 · 사후 수정 및 답장</span>
+          <h2>"거래처에서 갑자기 바꾸자고 해도, 고칠 서류만 골라 바꾸고 답장까지 써줍니다!"</h2>
+          <p class="step-sub">이메일이나 전화 메모를 넣으면 6종 서류 중 진짜 수정이 필요한 서류만 쏙 골라내어 고치고 거래처 답장 초안까지 만듭니다.</p>
+        </div>
+      </div>
+
+      <div class="scenario-cards-3">
+        <button type="button" class="scenario-card-btn easy-sc-btn" data-sc="pm_change">
+          <strong>⭐ 추천 시연 1: 총괄책임자(PM) 교체</strong>
+          <span>이준호 → 박서연으로 교체 요청 시 인력표·계획서 2종만 수정됩니다.</span>
+        </button>
+        <button type="button" class="scenario-card-btn easy-sc-btn" data-sc="qty_due">
+          <strong>📦 시연 2: 수량 100→120개 &amp; 납기 +7일</strong>
+          <span>수량·금액·일정이 바뀌어 관련 서류 5종이 자동 재계산됩니다.</span>
+        </button>
+        <button type="button" class="scenario-card-btn easy-sc-btn" data-sc="due_location">
+          <strong>🚚 시연 3: 납기 +10일 &amp; 장소 2연구동 변경</strong>
+          <span>금액 서류(견적·품의)는 건드리지 않고 현장 서류 3종만 수정합니다.</span>
+        </button>
+      </div>
+
+      <textarea id="easyChangeInput" class="change-textarea" placeholder="위의 추천 시연 버튼을 누르거나, 거래처에서 온 수정 요청 메일·전화 메모를 그대로 적어보세요."></textarea>
+
+      <div class="choice-row">
+        <button id="easyAnalyzeChangeBtn" type="button" class="ebtn ebtn-primary">🔍 어떤 서류를 고쳐야 할지 분석하기</button>
+        <button id="easyApplyChangeBtn" type="button" class="ebtn ebtn-green" disabled>✅ 선택된 서류만 수정 반영하기</button>
+        <button id="easyRevertBtn" type="button" class="ebtn" disabled>↺ 처음 상태(Rev.1)로 되돌리기</button>
+        <span id="easyChangeStatus" class="status-msg"></span>
+      </div>
+
+      <div id="easyImpactGrid" class="impact-grid-6"></div>
+
+      <div class="grid-2-easy">
+        <div>
+          <div class="sub-panel-title"><span>바뀌기 전 vs 바뀐 후 핵심 비교</span></div>
+          <div id="easyDiffBox">
+            <div class="info-mini-card" style="color: var(--muted);">위 시연 버튼을 눌러 어떤 숫자와 일정이 바뀌는지 비교해 보세요.</div>
+          </div>
+        </div>
+        <div>
+          <div class="sub-panel-title">
+            <span>바로 복사해 보내는 거래처 답장 메일</span>
+            <button id="easyCopyReplyBtn" type="button" class="ebtn" disabled>📋 답장 메일 복사하기</button>
+          </div>
+          <div id="easyReplyBox" class="reply-preview-box" style="color: var(--muted);">변경 분석을 실행하면 수정된 서류와 원안 유지 서류가 정리된 답장 메일이 자동 작성됩니다.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 4 -->
+    <section id="step4Card" class="step-card">
+      <div class="step-head">
+        <div>
+          <span class="step-pill">STEP 4 · 직원 최종 점검 &amp; 실무 가이드</span>
+          <h2>"제출 전 실수 0건 체크리스트 &amp; 복사용 AI 질문지"</h2>
+          <p class="step-sub">법적 서약·직인·개인정보는 직원이 마지막으로 직접 확인하고, 업무에 바로 복사해 쓸 수 있는 표준 질문지도 함께 제공합니다.</p>
+        </div>
+      </div>
+
+      <div class="grid-2-easy">
+        <div>
+          <div class="sub-panel-title">
+            <span>직원 최종 확인표 (체크하면서 실수 막기)</span>
+            <button id="easyCopyChecklistBtn" type="button" class="ebtn">📋 확인표 복사하기</button>
+          </div>
+          <div class="progress-row">
+            <div class="check-progress-track"><div id="easyProgressFill" class="check-progress-fill"></div></div>
+            <span id="easyProgressText" class="check-progress-label">0 / 5 확인 완료</span>
+          </div>
+          <div id="easyChecklistBox" class="easy-checklist"></div>
+        </div>
+
+        <div>
+          <div class="sub-panel-title">
+            <span>복사해서 바로 쓰는 업무별 AI 질문지</span>
+            <button id="easyCopyPromptBtn" type="button" class="ebtn">📋 질문지 복사하기</button>
+          </div>
+          <div class="choice-row" style="margin-bottom: 8px;">
+            <button type="button" class="ebtn easy-ptab active" data-prompt="step1_prep">① 공고 요약 질문지</button>
+            <button type="button" class="ebtn easy-ptab" data-prompt="step2_draft">② 서류 초안 질문지</button>
+            <button type="button" class="ebtn easy-ptab" data-prompt="step3_change">③ 변경·답장 질문지</button>
+          </div>
+          <div id="easyPromptBox" class="reply-preview-box"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom 3 Cards: Why not plain ChatGPT Web? -->
+    <section class="why-section">
+      <div class="why-cards-3">
+        <div class="why-card">
+          <h3>① 한글(.hwp) 표가 깨지지 않습니다</h3>
+          <p>ChatGPT 채팅창에 한글 파일을 올리면 표 칸이 밀리거나 다시 편집해야 하지만, 이 도구는 원본 한글 양식의 빈칸만 정확히 채워 내려받습니다.</p>
+        </div>
+        <div class="why-card">
+          <h3>② 돈 계산(단가·부가세) 실수가 없습니다</h3>
+          <p>AI가 감으로 계산하지 않고, 정밀 검산 코드가 견적서·발주서·검수조서·지출품의서 4종 숫자를 1원 단위까지 맞춰 검증합니다.</p>
+        </div>
+        <div class="why-card">
+          <h3>③ 회사 기밀이 밖으로 새지 않습니다</h3>
+          <p>단가·도면·인건비 같은 중요 자료는 외부 서버에 올리지 않고 회사 내부 PC(사내 보안 Local sLLM)에서 그대로 실행할 수 있습니다.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="hwp_browser_parser.js?v=20261125b"></script>
+  <script src="easy.js?v=20261125b"></script>
+</body>
+</html>
