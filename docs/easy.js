@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261125b";
+  const ASSET_VER = "20261126b";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -27,13 +27,21 @@
   };
 
   const DOC_REGISTRY = [
-    { id: "quotation", name: "1. 표준 견적서", kind: "핵심 기본 서류" },
-    { id: "purchase_order", name: "2. 발주서 · 작업지시서", kind: "핵심 기본 서류" },
-    { id: "delivery_inspection", name: "3. 거래명세 · 납품검수조서", kind: "핵심 기본 서류" },
-    { id: "expense_approval", name: "4. 지출결의 · 내부품의서", kind: "핵심 기본 서류" },
-    { id: "form_company_staff", name: "5. 업체 일반현황 · 참여인력표 (.hwpx)", kind: "기관 제출 양식" },
-    { id: "form_project_plan", name: "6. 사업수행계획서 요약 (.hwpx)", kind: "기관 제출 양식" },
+    { id: "quotation", name: "표준 견적서", kind: "기본 거래 서식" },
+    { id: "purchase_order", name: "발주서 · 작업지시서", kind: "기본 거래 서식" },
+    { id: "delivery_inspection", name: "거래명세 · 납품검수조서", kind: "기본 거래 서식" },
+    { id: "expense_approval", name: "지출결의 · 내부 품의서", kind: "기본 거래 서식" },
+    { id: "form_company_staff", name: "업체 일반현황 · 참여인력표 (.hwpx)", kind: "기관 제출 양식" },
+    { id: "form_project_plan", name: "사업수행계획서 요약 (.hwpx)", kind: "기관 제출 양식" },
   ];
+
+  const CASE_SELECT_LABELS = {
+    kriss_gpu_workstation_spec: "[출연연] 한국표준과학연구원(KRISS) — GPU 워크스테이션 구매규격서 (.hwp)",
+    dapa_uav_bid: "[방위사업청] 해안정찰용무인항공기 국내구매 입찰공고 (.hwpx)",
+    dapa_tactical_relay_bid: "[방위사업청] 전술이동중계기 국내구매 입찰공고(재공고) (.hwpx)",
+    dapa_sme_priority_items: "[방위사업청] 중소기업자 우선선정 품목지정 공고 (.hwpx)",
+    dapa_defense_innov_sme: "[방위사업청] 제5기 방산혁신기업 선정기업 공고 (.hwp)",
+  };
 
   let cases = [];
   let activeCase = null;
@@ -87,6 +95,13 @@
     return c.doc_revisions;
   }
 
+  function setStatus(nodeId, text, isError = false) {
+    const node = el(nodeId);
+    if (!node) return;
+    node.textContent = text || "";
+    node.classList.toggle("is-error", Boolean(isError));
+  }
+
   function loadProfile() {
     try {
       const savedV2 = JSON.parse(localStorage.getItem(PROFILE_STORAGE_KEY) || "null");
@@ -105,7 +120,7 @@
     try {
       localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(companyProfile));
     } catch (_) {
-      // Ignore storage failures in restricted modes
+      // Ignore storage failures in strict browser privacy modes
     }
   }
 
@@ -125,7 +140,7 @@
       if (node) node.value = companyProfile[key] || "";
     });
     if (el("easyProfilePreview")) {
-      el("easyProfilePreview").textContent = `${companyProfile.name} · 대표 ${companyProfile.ceo} · 클릭해 수정`;
+      el("easyProfilePreview").textContent = `${companyProfile.name} · ${companyProfile.biz_no} · 대표자 ${companyProfile.ceo}`;
     }
   }
 
@@ -142,7 +157,7 @@
       track_record_text: (el("eProfTrack")?.value || "").trim() || DEFAULT_PROFILE.track_record_text,
     };
     if (el("easyProfilePreview")) {
-      el("easyProfilePreview").textContent = `${companyProfile.name} · 대표 ${companyProfile.ceo} · 클릭해 수정`;
+      el("easyProfilePreview").textContent = `${companyProfile.name} · ${companyProfile.biz_no} · 대표자 ${companyProfile.ceo}`;
     }
     saveProfile();
   }
@@ -255,52 +270,125 @@
     try {
       await navigator.clipboard.writeText(txt);
       if (btn) {
-        btn.textContent = "복사 완료!";
+        btn.textContent = "복사됨";
         setTimeout(() => {
           btn.textContent = defaultLabel;
         }, 1600);
       }
     } catch (_) {
-      if (btn) btn.textContent = "직접 드래그해 복사하세요";
+      if (btn) {
+        btn.textContent = "직접 복사 필요";
+        setTimeout(() => {
+          btn.textContent = defaultLabel;
+        }, 1600);
+      }
     }
   }
 
-  /* ---------- STEP 1: Plain-Korean Notice Summary ---------- */
+  /* ---------- 1단계: 공고 기본 제원 및 검토 유의사항 표 ---------- */
+  function populateCaseSelect() {
+    const sel = el("easyCaseSelect");
+    if (!sel) return;
+    sel.innerHTML = "";
+    cases.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = CASE_SELECT_LABELS[c.id] || `${c.short_title} (${c.parse_info?.filename || "문서"})`;
+      sel.appendChild(opt);
+    });
+    if (activeCase && !cases.some((c) => c.id === activeCase.id)) {
+      const upOpt = document.createElement("option");
+      upOpt.value = activeCase.id;
+      upOpt.textContent = `[업로드 문서] ${activeCase.short_title}`;
+      sel.appendChild(upOpt);
+    }
+    if (activeCase) sel.value = activeCase.id;
+  }
+
   function renderStep1Summary(c) {
     const s = c.source_summary || {};
+    const p = c.parse_info || {};
     const q = c.doc_chain.quotation;
     const po = c.doc_chain.purchase_order;
-    const agencyClean = String(s.issuing_agency || "공고 기관").replace(/\(.*사용자 제공.*\)/g, "").trim() || "한국표준과학연구원(KRISS)";
-    const attList = (s.mandatory_attachments || []).slice(0, 3);
-    const risks = (s.risk_alerts || []).slice(0, 3);
+    const agencyClean = String(s.issuing_agency || "미기재").replace(/\(.*사용자 제공.*\)/g, "").trim() || "한국표준과학연구원(KRISS)";
+    const attList = (s.mandatory_attachments || []).slice(0, 4);
+    const schedules = (s.key_schedules || []).slice(0, 4);
+    const risks = (s.risk_alerts || []).slice(0, 4);
 
     el("easySummaryCards").innerHTML = `
-      <div class="info-mini-card">
-        <h3>📌 어떤 사업인가요?</h3>
-        <ul>
-          <li><strong>어디서 냈나요?</strong> ${esc(agencyClean)}</li>
-          <li><strong>사업 이름:</strong> ${esc(s.document_title || q.project_name)}</li>
-          <li><strong>예산 · 품목 규모:</strong> ${esc(s.budget_or_scale || won(q.grand_total))}</li>
-          <li><strong>납품 목표일:</strong> ${esc(po.due_date || "-")}</li>
-        </ul>
+      <h3 class="sub-heading">공고 기본 제원 및 준비 현황</h3>
+      <div class="table-wrap">
+        <table class="kv-table">
+          <tbody>
+            <tr>
+              <th>발주 · 공고기관</th>
+              <td><span class="state-tag real">원문 추출</span> &nbsp;${esc(agencyClean)}</td>
+            </tr>
+            <tr>
+              <th>공고 · 규격명</th>
+              <td><strong>${esc(s.document_title || q.project_name)}</strong> (${esc(s.project_category || "공공조달")})</td>
+            </tr>
+            <tr>
+              <th>원문 파일 구조</th>
+              <td class="break-any">${esc(p.filename || "-")} · ${esc(p.format_type || "-")} · ${num(p.paragraph_count || 0)}문단 · ${num(p.table_count || 0)}표 · ${num(p.char_count || 0)}자</td>
+            </tr>
+            <tr>
+              <th>규모 · 대상 품목</th>
+              <td>${esc(s.budget_or_scale || won(q.grand_total))}</td>
+            </tr>
+            <tr>
+              <th>주요 일정 · 보증</th>
+              <td>${schedules.length ? `<ul class="flat-list">${schedules.map((k) => `<li>${esc(k)}</li>`).join("")}</ul>` : "원문 일정 세부 확인 필요"}</td>
+            </tr>
+            <tr>
+              <th>제출서류 · 사내 준비물</th>
+              <td>
+                <ul class="flat-list">
+                  ${attList.length ? attList.map((a) => `<li>${esc(a)}</li>`).join("") : "<li>공고 첨부 지정양식 및 견적서 일체</li>"}
+                  <li><strong>사내 준비물:</strong> 기업 기본자료(${esc(companyProfile.name)}), 참여인력(${esc(c.pm_name || "이준호")} 외), 수행실적, 대표 직인</li>
+                </ul>
+              </td>
+            </tr>
+            <tr>
+              <th>시연 기준 작성값</th>
+              <td><span class="state-tag demo">시연 가정치</span> &nbsp;예시 견적총액 ${won(q.grand_total)} (VAT 포함) · 작업지시 납기 ${esc(po.due_date || "-")} · 배정 PM ${esc(c.pm_name || "이준호")}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div class="info-mini-card">
-        <h3>📋 무엇을 내고 뭘 챙겨야 하나요?</h3>
-        <ul>
-          ${attList.length ? attList.map((a) => `<li>${esc(a)}</li>`).join("") : "<li>공고 첨부 지정양식 및 견적서 일체</li>"}
-          <li><strong>사내 준비물:</strong> 사업자·인력현황(${esc(c.pm_name || "이준호")} 외), 수행실적, 대표 직인</li>
-        </ul>
-      </div>
-      <div class="info-mini-card warn">
-        <h3>⚠️ 놓치면 안 되는 주의사항!</h3>
-        <ul>
-          ${risks.length ? risks.map((r) => `<li><strong>${esc(r.title)}:</strong> ${esc(r.detail)}</li>`).join("") : "<li>입찰 마감일과 정품·규격 증빙 요건을 반드시 확인하세요.</li>"}
-        </ul>
+
+      <h3 class="sub-heading">원문 검토 유의사항</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 110px;">구분</th>
+              <th style="width: 240px;">검토 항목</th>
+              <th>세부 확인 내용</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              risks.length
+                ? risks
+                    .map(
+                      (r) => `
+              <tr>
+                <td><span class="state-tag ${r.level === "high" ? "warn" : ""}">${r.level === "high" ? "중요 확인" : "일반 확인"}</span></td>
+                <td><strong>${esc(r.title)}</strong></td>
+                <td>${esc(r.detail)}</td>
+              </tr>`
+                    )
+                    .join("")
+                : `<tr><td><span class="state-tag">일반 확인</span></td><td><strong>기본 검토</strong></td><td>마감 기한, 정품 규격 및 증빙 서류 요건을 제출 전 최종 확인하십시오.</td></tr>`
+            }
+          </tbody>
+        </table>
       </div>
     `;
   }
 
-  /* ---------- STEP 2: Universal HWPX Filler & Basic 4 Docs ---------- */
+  /* ---------- 2단계: 한글 양식 자동 입력 및 기본 4종 서식 ---------- */
   function buildFormContext(c) {
     const revs = ensureRevs(c);
     const q = c.doc_chain.quotation;
@@ -356,7 +444,7 @@
       PLAN_SCOPE: `총괄책임자(PM) ${pmDisplay} 책임 하에 ${itemSummary} 제작·공급 및 시험성적서 제출 (총 제안액 ${won(q.grand_total)}).`,
       PLAN_SCHEDULE: `작업지시(${po.order_date}) → 정밀가공·검사 → 현장 납품(${delivLoc} / 납기 ${po.due_date}) → 검수 완료(${di.delivery_date}).`,
       PLAN_QUALITY: `${companyProfile.capability} 및 보유 인증(${companyProfile.certs}) 기준 출하 전수검사를 적용함.`,
-      PLAN_TRACK: trackRows.map((t) => `• ${t.org}: ${t.project} (${t.period}, ${t.amount})`).join(" / "),
+      PLAN_TRACK: trackRows.map((t) => `${t.org}: ${t.project} (${t.period}, ${t.amount})`).join(" / "),
     };
 
     const itemRows = (q.items || []).map((it) => ({
@@ -371,36 +459,37 @@
     return { placeholders, kv, staffRows, trackRows, itemRows };
   }
 
-  function friendlySourcePill(src) {
-    if (src === "기업자료") return `<span class="src-pill company">우리 회사 정보</span>`;
-    if (src === "공고·서식 연동") return `<span class="src-pill notice">공고 · 계약 내용</span>`;
-    if (src === "AI 초안") return `<span class="src-pill notice">AI 자동 초안</span>`;
-    return `<span class="src-pill manual">직접 입력 필요</span>`;
+  function renderSourceTag(src) {
+    if (src === "기업자료") return `<span class="state-tag target">기업 정보 DB</span>`;
+    if (src === "공고·서식 연동") return `<span class="state-tag real">공고 · 계약 연동</span>`;
+    if (src === "AI 초안") return `<span class="state-tag real">규칙 초안</span>`;
+    return `<span class="state-tag warn">수동 입력 필요</span>`;
   }
 
   function renderEasySlotTable() {
     if (!activeFormPlan) return;
     const filledCount = activeFormPlan.slots.filter((s) => String(s.value || "").trim() !== "").length;
-    el("easyFormTitle").textContent =
-      `[${activeFormPlan.formType}] · 빈칸 ${activeFormPlan.slots.length}곳 중 ${filledCount}곳 자동 입력 완료!`;
+    el("easyFormTitle").innerHTML =
+      `<span>양식 분류: ${esc(activeFormPlan.formType)}</span><span>자동 매핑: ${filledCount} / ${activeFormPlan.slots.length}건 · 대상 파일: <span class="break-any">${esc(activeFormFilename)}</span></span>`;
 
     const notice = el("easyHumanSafetyNotice");
     const hc = activeFormPlan.humanChecks || {};
     if ((hc.checkboxCellCount || 0) > 0 || hc.hasSignatureSeal) {
       notice.innerHTML =
-        `🛡️ <strong>안전 보호 작동 중:</strong> 이 양식 안의 법적 체크칸(<strong>[ ] 예 / 아니오</strong> ${hc.checkboxCellCount || 0}곳)과 <strong>도장·서명란</strong>은 법적 허위기재 실수를 막기 위해 AI가 일부러 비워두었습니다. 직원이 내용을 확인한 뒤 직접 체크·날인해 주세요.`;
+        `<strong>수동 확인 안내:</strong> 양식 내 선택·법적 서약 체크란([ ] 표기 ${hc.checkboxCellCount || 0}건)과 대표자 서명·날인란은 허위 기재 방지를 위해 자동 입력에서 제외했습니다. 파일 다운로드 후 담당자가 직접 확인·표기하십시오.`;
       notice.classList.remove("hidden");
     } else {
       notice.classList.add("hidden");
     }
 
     el("easySlotTableWrap").innerHTML = `
-      <table class="easy-slot-table">
+      <table class="data-table">
         <thead>
           <tr>
-            <th style="width: 28%;">한글 양식 내 빈칸 항목</th>
-            <th style="width: 18%;">어디서 가져왔나요?</th>
-            <th style="width: 54%;">자동 입력된 내용 (클릭해 바로 수정 가능)</th>
+            <th style="width: 24%;">항목명</th>
+            <th style="width: 16%;">양식 위치</th>
+            <th style="width: 16%;">데이터 출처</th>
+            <th style="width: 44%;">자동 입력값 (직접 수정 가능)</th>
           </tr>
         </thead>
         <tbody>
@@ -408,9 +497,10 @@
             .map(
               (s, i) => `
             <tr>
-              <td><strong>${esc(s.label)}</strong><div style="font-size:11px;color:#64748b;">${esc(s.location)}</div></td>
-              <td>${friendlySourcePill(s.source)}</td>
-              <td><input type="text" class="easy-slot-input" data-idx="${i}" value="${esc(s.value)}" placeholder="필요 시 직접 입력" /></td>
+              <td><strong>${esc(s.label)}</strong></td>
+              <td class="slot-meta-sub">${esc(s.location)}</td>
+              <td>${renderSourceTag(s.source)}</td>
+              <td><input type="text" class="slot-input easy-slot-input" data-idx="${i}" value="${esc(s.value)}" placeholder="필요 시 직접 입력" /></td>
             </tr>`
             )
             .join("")}
@@ -440,23 +530,23 @@
       activeFormFilename = outFilename;
       activeFormPlan = plan;
       renderEasySlotTable();
-      el("easyFormStatus").textContent = "검토 후 왼쪽 파란 버튼을 누르면 바로 한글 파일(.hwpx)로 저장됩니다.";
+      setStatus("easyFormStatus", "입력값을 검토한 뒤 한글 파일(.hwpx) 또는 CSV로 내려받으십시오.");
     } catch (err) {
-      el("easyFormTitle").textContent = "양식을 읽는 중 오류가 발생했습니다.";
-      el("easyFormStatus").textContent = err.message;
+      el("easyFormTitle").textContent = "양식 분석 중 오류가 발생했습니다.";
+      setStatus("easyFormStatus", err.message, true);
     }
   }
 
   async function loadPresetForm(templateFile, suffix, formKey) {
     if (!activeCase) return;
-    el("easyFormTitle").textContent = "한글 양식의 빈칸 위치를 AI가 찾고 있습니다...";
+    el("easyFormTitle").textContent = "한글 양식 구조를 분석하고 있습니다.";
     try {
       const resp = await fetch(`templates/${templateFile}?v=${ASSET_VER}`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const buf = await resp.arrayBuffer();
       await loadFormBuffer(buf, `${activeCase.id}_${suffix}.hwpx`, formKey);
     } catch (err) {
-      el("easyFormStatus").textContent = `불러오기 실패: ${err.message}`;
+      setStatus("easyFormStatus", `양식 불러오기 실패: ${err.message}`, true);
     }
   }
 
@@ -487,61 +577,98 @@
       const q = chain.quotation;
       container.innerHTML = `
         <div class="a4-head">
-          <div><h3>표 준 견 적 서</h3><div style="font-size:12.5px;color:#475569;">문서번호 ${esc(q.doc_no)} | 견적일 ${esc(q.quote_date)}</div></div>
-          <div style="font-size:12.5px;text-align:right;">공급자: <strong>${esc(companyProfile.name)}</strong><br/>대표 ${esc(companyProfile.ceo)}</div>
+          <div>
+            <h3>표 준 견 적 서</h3>
+            <div class="a4-meta">문서번호 ${esc(q.doc_no)} | 견적일 ${esc(q.quote_date)}</div>
+          </div>
+          <div class="a4-meta">공급자: <strong>${esc(companyProfile.name)}</strong> · 대표자 ${esc(companyProfile.ceo)}</div>
         </div>
-        <table class="a4-table">
-          <tr><th style="width:18%;">받는 곳</th><td>${esc(q.recipient)}</td><th style="width:18%;">건 명</th><td><strong>${esc(q.project_name)}</strong></td></tr>
-          <tr><th>총 합계 (VAT포함)</th><td colspan="3" style="font-size:15px;"><strong>${won(q.grand_total)}</strong> (공급가액 ${won(q.total_supply)} + 부가세 ${won(q.vat)})</td></tr>
-        </table>
-        <table class="a4-table">
-          <thead><tr><th>No</th><th>품명</th><th>규격</th><th>수량</th><th>단가(원)</th><th>공급가액(원)</th></tr></thead>
-          <tbody>
-            ${q.items.map((it, idx) => `<tr><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td>${esc(it.spec)}</td><td class="num">${num(it.qty)} ${esc(it.unit)}</td><td class="num">${num(it.unit_price)}</td><td class="num"><strong>${num(it.supply_amount)}</strong></td></tr>`).join("")}
-          </tbody>
-        </table>`;
+        <div class="table-wrap">
+          <table class="kv-table">
+            <tbody>
+              <tr><th>수신처</th><td>${esc(q.recipient)}</td></tr>
+              <tr><th>건명</th><td><strong>${esc(q.project_name)}</strong></td></tr>
+              <tr><th>총 합계 (VAT 포함)</th><td><strong>${won(q.grand_total)}</strong> (공급가액 ${won(q.total_supply)} + 부가세 ${won(q.vat)})</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap" style="margin-bottom:0;">
+          <table class="data-table">
+            <thead><tr><th class="center">번호</th><th>품명</th><th>규격</th><th class="num">수량</th><th class="num">단가(원)</th><th class="num">공급가액(원)</th></tr></thead>
+            <tbody>
+              ${q.items.map((it, idx) => `<tr><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td>${esc(it.spec)}</td><td class="num">${num(it.qty)} ${esc(it.unit)}</td><td class="num">${num(it.unit_price)}</td><td class="num"><strong>${num(it.supply_amount)}</strong></td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>`;
     } else if (activeB4Doc === "purchase_order") {
       const po = chain.purchase_order;
       container.innerHTML = `
         <div class="a4-head">
-          <div><h3>발 주 서 · 작 업 지 시 서</h3><div style="font-size:12.5px;color:#475569;">관리번호 ${esc(po.doc_no)} | 납기일 <strong>${esc(po.due_date)}</strong></div></div>
+          <div>
+            <h3>발 주 서 · 작 업 지 시 서</h3>
+            <div class="a4-meta">관리번호 ${esc(po.doc_no)} | 납기일 <strong>${esc(po.due_date)}</strong></div>
+          </div>
         </div>
-        <table class="a4-table">
-          <tr><th style="width:20%;">납품 장소</th><td>${esc(activeCase.delivery_location || chain.delivery_inspection?.delivery_location || "-")}</td><th style="width:20%;">총괄책임자(PM)</th><td><strong>${esc(activeCase.pm_name || "이준호")}</strong></td></tr>
-        </table>
-        <table class="a4-table">
-          <thead><tr><th>No</th><th>품목명</th><th>작업 규격</th><th>수량</th><th>품질 기준</th></tr></thead>
-          <tbody>
-            ${po.items.map((it, idx) => `<tr><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td>${esc(it.spec_material)}</td><td class="num"><strong>${num(it.qty)}</strong></td><td>${esc(it.qc_standard)}</td></tr>`).join("")}
-          </tbody>
-        </table>
-        <p style="font-size:12.5px;margin:0;"><strong>작업 지시:</strong> ${esc(po.instructions)}</p>`;
+        <div class="table-wrap">
+          <table class="kv-table">
+            <tbody>
+              <tr><th>납품 장소</th><td>${esc(activeCase.delivery_location || chain.delivery_inspection?.delivery_location || "-")}</td></tr>
+              <tr><th>총괄책임자(PM)</th><td><strong>${esc(activeCase.pm_name || "이준호")}</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap" style="margin-bottom:0;">
+          <table class="data-table">
+            <thead><tr><th class="center">번호</th><th>품목명</th><th>작업 규격</th><th class="num">수량</th><th>품질 기준</th></tr></thead>
+            <tbody>
+              ${po.items.map((it, idx) => `<tr><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td>${esc(it.spec_material)}</td><td class="num"><strong>${num(it.qty)}</strong></td><td>${esc(it.qc_standard)}</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+        <p class="a4-note"><strong>작업 지시:</strong> ${esc(po.instructions)}</p>`;
     } else if (activeB4Doc === "delivery_inspection") {
       const di = chain.delivery_inspection;
       container.innerHTML = `
         <div class="a4-head">
-          <div><h3>거 래 명 세 · 납 품 검 수 조 서</h3><div style="font-size:12.5px;color:#475569;">검수번호 ${esc(di.doc_no)} | 검수예정일 ${esc(di.delivery_date)}</div></div>
+          <div>
+            <h3>거 래 명 세 · 납 품 검 수 조 서</h3>
+            <div class="a4-meta">검수번호 ${esc(di.doc_no)} | 검수예정일 ${esc(di.delivery_date)}</div>
+          </div>
         </div>
-        <table class="a4-table">
-          <tr><th style="width:20%;">납품 장소</th><td>${esc(di.delivery_location)}</td><th style="width:20%;">검수 기관</th><td>${esc(di.inspector_org)}</td></tr>
-        </table>
-        <table class="a4-table">
-          <thead><tr><th>No</th><th>품명</th><th>발주수량</th><th>납품수량</th><th>합격수량</th><th>판정</th></tr></thead>
-          <tbody>
-            ${di.items.map((it, idx) => `<tr><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td class="num">${num(it.ordered_qty)}</td><td class="num">${num(it.delivered_qty)}</td><td class="num">${num(it.passed_qty)}</td><td class="center"><strong>${esc(it.result)}</strong></td></tr>`).join("")}
-          </tbody>
-        </table>`;
+        <div class="table-wrap">
+          <table class="kv-table">
+            <tbody>
+              <tr><th>납품 장소</th><td>${esc(di.delivery_location)}</td></tr>
+              <tr><th>검수 기관</th><td>${esc(di.inspector_org)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap" style="margin-bottom:0;">
+          <table class="data-table">
+            <thead><tr><th class="center">번호</th><th>품명</th><th class="num">발주수량</th><th class="num">납품수량</th><th class="num">합격수량</th><th class="center">판정</th></tr></thead>
+            <tbody>
+              ${di.items.map((it, idx) => `<tr><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td class="num">${num(it.ordered_qty)}</td><td class="num">${num(it.delivered_qty)}</td><td class="num">${num(it.passed_qty)}</td><td class="center"><strong>${esc(it.result)}</strong></td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>`;
     } else {
       const ap = chain.expense_approval;
       container.innerHTML = `
         <div class="a4-head">
-          <div><h3>지 출 결 의 · 내 부 품 의 서</h3><div style="font-size:12.5px;color:#475569;">품의번호 ${esc(ap.doc_no)} | 기안자 ${esc(ap.drafter)}</div></div>
+          <div>
+            <h3>지 출 결 의 · 내 부 품 의 서</h3>
+            <div class="a4-meta">품의번호 ${esc(ap.doc_no)} | 기안자 ${esc(ap.drafter)}</div>
+          </div>
         </div>
-        <table class="a4-table">
-          <tr><th style="width:22%;">품의 제목</th><td><strong>${esc(ap.title)}</strong></td></tr>
-          <tr><th>요청 총액 (VAT포함)</th><td><strong>${won(ap.grand_total)}</strong> (공급가액 ${won(ap.total_supply)} + VAT ${won(ap.vat)})</td></tr>
-          <tr><th>사업 목적</th><td>${esc(ap.purpose_and_effect)}</td></tr>
-        </table>`;
+        <div class="table-wrap" style="margin-bottom:0;">
+          <table class="kv-table">
+            <tbody>
+              <tr><th>품의 제목</th><td><strong>${esc(ap.title)}</strong></td></tr>
+              <tr><th>요청 총액 (VAT 포함)</th><td><strong>${won(ap.grand_total)}</strong> (공급가액 ${won(ap.total_supply)} + 부가세 ${won(ap.vat)})</td></tr>
+              <tr><th>사업 목적</th><td>${esc(ap.purpose_and_effect)}</td></tr>
+            </tbody>
+          </table>
+        </div>`;
     }
   }
 
@@ -569,12 +696,12 @@
       ].map(cell).join(",")
     );
     const csv = "\uFEFF" + [headers.map(cell).join(","), ...rows].join("\r\n");
-    const outName = `${c.id}_Rev${revs.quotation || 1}_엑셀ERP용.csv`;
+    const outName = `${c.id}_Rev${revs.quotation || 1}_erp_import.csv`;
     triggerDownloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8;" }), outName);
-    el("easyFormStatus").textContent = `✅ '${outName}' 엑셀·ERP용 파일이 저장되었습니다!`;
+    setStatus("easyFormStatus", `저장 완료: ${outName}`);
   }
 
-  /* ---------- STEP 3: Change Analysis & 6-Card Selective Revision ---------- */
+  /* ---------- 3단계: 변경 요청 분석 및 선별 개정 ---------- */
   function shiftDate(dateStr, days) {
     const m = String(dateStr || "").match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
     const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(2026, 11, 20);
@@ -676,12 +803,12 @@
     };
 
     const reasons = {
-      quotation: qtyChanged ? `수량이 ${oldQty}→${prop.new_qty}로 바뀌어 금액 재계산 필요` : "돈·수량 변동이 없어 고치지 않습니다",
-      purchase_order: impacted.purchase_order ? "현장 납품 수량 · 납기 · 장소 변경 반영 필요" : "작업 수량 · 납기 · 장소 변동 없음",
-      delivery_inspection: impacted.delivery_inspection ? "납품 시 검수할 기준 수량 · 날짜 · 장소 업데이트" : "검수 기준과 납품 장소 변동 없음",
-      expense_approval: qtyChanged ? "지출 총액이 바뀌어 내부 품의서 다시 올림" : "지출 금액이 그대로라 재결재 불필요",
-      form_company_staff: pmChanged ? `총괄책임자 ${oldPm} → ${prop.new_pm} 교체 반영 필요` : "투입 인력 변동 없음",
-      form_project_plan: impacted.form_project_plan ? "수행 계획 내 담당자·일정·예산 요약 업데이트" : "사업 수행 내용 변동 없음",
+      quotation: qtyChanged ? `수량 변경(${oldQty}→${prop.new_qty})에 따른 금액 재산정 필요` : "수량·단가 변동 없음",
+      purchase_order: impacted.purchase_order ? "작업 수량 · 납기 · 납품장소 반영 필요" : "작업 수량 · 납기 · 장소 변동 없음",
+      delivery_inspection: impacted.delivery_inspection ? "검수 기준 수량 · 검수일 · 장소 현행화 필요" : "검수 기준 및 납품 장소 변동 없음",
+      expense_approval: qtyChanged ? "지출 총액 변동으로 내부 품의 재상신 필요" : "총액 변동 없음 (재결재 불필요)",
+      form_company_staff: pmChanged ? `총괄책임자(${oldPm} → ${prop.new_pm}) 인력표 수정 필요` : "투입 인력 변동 없음",
+      form_project_plan: impacted.form_project_plan ? "수행계획서 내 책임자·일정·예산 요약 수정 필요" : "사업 수행 내용 변동 없음",
     };
 
     return DOC_REGISTRY.map((d) => ({
@@ -759,40 +886,63 @@
 
     return [
       `제목: [변경 확인] ${qNew.project_name} 변경 요청 반영 회신`,
-      `받는 분: ${qNew.recipient} 담당자님`,
-      `보내는 곳: ${companyProfile.name} ${companyProfile.contact} (${companyProfile.phone})`,
+      `수신: ${qNew.recipient} 담당자님`,
+      `발신: ${companyProfile.name} ${companyProfile.contact} (${companyProfile.phone})`,
       "",
-      `안녕하세요, ${companyProfile.name} ${companyProfile.contact}입니다.`,
-      `말씀하신 변경 요청을 확인해 아래처럼 바뀐 서류(${revised.length}종)만 정확히 고쳐서 다시 보내드립니다.`,
+      `안녕하십니까, ${companyProfile.name} ${companyProfile.contact}입니다.`,
+      `요청 주신 변경 사항을 검토해 개정 대상 서류(${revised.length}종)에 반영하고, 변동이 없는 서류(${kept.length}종)는 기존 원안을 유지하여 회신드립니다.`,
       "",
-      `[이번에 바뀐 내용]`,
+      `1. 주요 변경 내역`,
       `- 수량(1번 품목): ${num(qOld.items[0].qty)}${qOld.items[0].unit} → ${num(qNew.items[0].qty)}${qNew.items[0].unit}`,
       `- 납품 기한: ${base.doc_chain.purchase_order.due_date} → ${after.doc_chain.purchase_order.due_date}`,
       `- 납품 장소: ${base.delivery_location || "-"} → ${after.delivery_location || "-"}`,
       `- 총괄책임자(PM): ${base.pm_name || "이준호"} → ${after.pm_name || "이준호"}`,
-      `- 총 합계금액(부가세 포함): ${won(qOld.grand_total)} → ${won(qNew.grand_total)}`,
+      `- 총 합계금액(VAT 포함): ${won(qOld.grand_total)} → ${won(qNew.grand_total)}`,
       "",
-      `[서류 처리 안내]`,
-      `• 새로 고쳐서 첨부한 서류 (${revised.length}종): ${revised.join(", ") || "없음"}`,
-      `• 변동 없어 기존 그대로 쓰는 서류 (${kept.length}종): ${kept.join(", ") || "없음"}`,
+      `2. 서류별 처리 현황`,
+      `- 개정 첨부 서류 (${revised.length}종): ${revised.join(", ") || "없음"}`,
+      `- 원안 유지 서류 (${kept.length}종): ${kept.join(", ") || "없음"}`,
       "",
-      `첨부된 수정 파일(.hwpx) 확인 후 회신 부탁드립니다. 감사합니다.`,
+      `첨부된 개정 파일을 확인해 주시기 바랍니다. 감사합니다.`,
     ].join("\n");
   }
 
   function renderIdleImpactGrid(c) {
     const revs = ensureRevs(c);
-    el("easyImpactGrid").innerHTML = DOC_REGISTRY.map(
-      (d) => `
-      <div class="doc-impact-card keep-safe" style="cursor: default;">
-        <div class="impact-card-top">
-          <span class="impact-badge">대기 중</span>
-          <span class="impact-rev">Rev.${revs[d.id] || 1}</span>
-        </div>
-        <div class="impact-doc-name">${esc(d.name)}</div>
-        <div class="impact-reason">위 시연 버튼을 누르면 이 서류를 고쳐야 할지 자동 판정합니다.</div>
-      </div>`
-    ).join("");
+    el("easyImpactGrid").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="center" style="width: 56px;">적용</th>
+            <th style="width: 220px;">관리 서식명</th>
+            <th style="width: 120px;">분류</th>
+            <th class="center" style="width: 96px;">판정</th>
+            <th>판정 근거</th>
+            <th class="center" style="width: 110px;">현재 버전</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${DOC_REGISTRY.map(
+            (d) => `
+            <tr>
+              <td class="center"><input type="checkbox" disabled /></td>
+              <td><strong>${esc(d.name)}</strong></td>
+              <td>${esc(d.kind)}</td>
+              <td class="center"><span class="state-tag keep">대기</span></td>
+              <td style="color: var(--text-sub);">변경 요청을 입력하고 '변경 대상 분석'을 실행하십시오.</td>
+              <td class="center"><span class="rev-tag">Rev.${revs[d.id] || 1}</span></td>
+            </tr>`
+          ).join("")}
+        </tbody>
+      </table>`;
+  }
+
+  function setApplyButtonState(enabled, selectedCount) {
+    const btn = el("easyApplyChangeBtn");
+    if (!btn) return;
+    btn.disabled = !enabled;
+    btn.classList.toggle("btn-action-ready", Boolean(enabled));
+    btn.textContent = enabled ? `선택 서식 ${selectedCount}종 개정 적용` : "선택 서식 개정 적용";
   }
 
   function renderPendingImpact() {
@@ -802,21 +952,35 @@
     const after = applySelectiveProposal(activeCase, proposal, selectedIds);
     pendingProposal.afterCase = after;
 
-    el("easyImpactGrid").innerHTML = impactRows
-      .map((row) => {
-        const isEdit = sel.has(row.id);
-        return `
-        <label class="doc-impact-card ${isEdit ? "needs-edit" : "keep-safe"}">
-          <div class="impact-card-top">
-            <span class="impact-badge">${isEdit ? "✏️ 수정 필요" : "🔒 고칠 필요 없음"}</span>
-            <input type="checkbox" class="easy-imp-cb" data-id="${esc(row.id)}" ${isEdit ? "checked" : ""} />
-          </div>
-          <div class="impact-doc-name">${esc(row.name)}</div>
-          <div class="impact-reason">${esc(row.reason)}</div>
-          <div class="impact-rev">${isEdit ? `Rev.${row.currentRev} → Rev.${row.currentRev + 1}로 수정` : `Rev.${row.currentRev} 그대로 유지`}</div>
-        </label>`;
-      })
-      .join("");
+    el("easyImpactGrid").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="center" style="width: 56px;">적용</th>
+            <th style="width: 220px;">관리 서식명</th>
+            <th style="width: 120px;">분류</th>
+            <th class="center" style="width: 96px;">판정</th>
+            <th>판정 근거</th>
+            <th class="center" style="width: 130px;">버전 변경</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${impactRows
+            .map((row) => {
+              const isEdit = sel.has(row.id);
+              return `
+              <tr class="${isEdit ? "row-target" : ""}">
+                <td class="center"><input type="checkbox" class="easy-imp-cb" data-id="${esc(row.id)}" ${isEdit ? "checked" : ""} /></td>
+                <td><strong>${esc(row.name)}</strong></td>
+                <td>${esc(row.kind)}</td>
+                <td class="center"><span class="state-tag ${isEdit ? "target" : "keep"}">${isEdit ? "수정 대상" : "유지"}</span></td>
+                <td>${esc(row.reason)}</td>
+                <td class="center">${isEdit ? `<strong>Rev.${row.currentRev} → Rev.${row.currentRev + 1}</strong>` : `Rev.${row.currentRev} 유지`}</td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>`;
 
     el("easyImpactGrid").querySelectorAll(".easy-imp-cb").forEach((cb) => {
       cb.addEventListener("change", () => {
@@ -834,31 +998,35 @@
       ["1번 품목 수량", `${num(qOld.items[0].qty)}${qOld.items[0].unit}`, `${num(qNew.items[0].qty)}${qNew.items[0].unit}`],
       ["납품 기한", activeCase.doc_chain.purchase_order.due_date || "-", after.doc_chain.purchase_order.due_date || "-"],
       ["납품 장소", activeCase.delivery_location || "-", after.delivery_location || "-"],
-      ["총 합계(VAT포함)", won(qOld.grand_total), won(qNew.grand_total)],
+      ["총 합계(VAT 포함)", won(qOld.grand_total), won(qNew.grand_total)],
     ];
 
     el("easyDiffBox").innerHTML = `
-      <table class="diff-mini-table">
-        <thead><tr><th>항목</th><th>바뀌기 전</th><th>바뀐 후</th></tr></thead>
-        <tbody>
-          ${diffRows.map(([k, b, a]) => `<tr class="${b !== a ? "is-changed" : ""}"><td><strong>${esc(k)}</strong></td><td>${esc(b)}</td><td><strong>${esc(a)}</strong></td></tr>`).join("")}
-        </tbody>
-      </table>`;
+      <div class="table-wrap" style="margin-bottom:0;">
+        <table class="data-table">
+          <thead><tr><th>비교 항목</th><th>변경 전</th><th>변경 후</th></tr></thead>
+          <tbody>
+            ${diffRows
+              .map(
+                ([k, b, a]) =>
+                  `<tr class="${b !== a ? "row-target" : ""}"><td><strong>${esc(k)}</strong></td><td>${esc(b)}</td><td><strong>${esc(a)}</strong></td></tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>`;
 
     el("easyReplyBox").textContent = buildEasyReplyText(activeCase, after, selectedIds);
-    el("easyApplyChangeBtn").disabled = selectedIds.length === 0;
-    el("easyApplyChangeBtn").textContent = selectedIds.length
-      ? `✅ 선택된 ${selectedIds.length}개 서류만 수정 반영하기`
-      : "수정할 서류가 없습니다";
+    setApplyButtonState(selectedIds.length > 0, selectedIds.length);
     el("easyCopyReplyBtn").disabled = false;
-    el("easyChangeStatus").textContent = `분석 완료: 6종 중 ${selectedIds.length}종만 고치고, ${6 - selectedIds.length}종은 건드리지 않습니다.`;
+    setStatus("easyChangeStatus", `분석 완료: 6종 중 ${selectedIds.length}종 수정 대상, ${6 - selectedIds.length}종 원안 유지`);
   }
 
   function runChangeAnalysis() {
     if (!activeCase) return;
     const txt = (el("easyChangeInput").value || "").trim();
     if (!txt) {
-      el("easyChangeStatus").textContent = "수정 요청 내용을 입력하거나 위 시연 카드를 눌러주세요.";
+      setStatus("easyChangeStatus", "변경 요청 내용을 입력하거나 예시 시나리오를 선택하십시오.", true);
       return;
     }
     const prop = parseChangeText(txt, activeCase);
@@ -868,16 +1036,16 @@
     renderPendingImpact();
   }
 
-  /* ---------- STEP 4: Final Checklist & Easy Prompts ---------- */
+  /* ---------- 4단계: 최종 점검표 및 표준 프롬프트 ---------- */
   function getChecklistItems(c) {
     const q = c.doc_chain.quotation;
     const po = c.doc_chain.purchase_order;
     return [
-      { id: "c1", title: "1. 돈(금액 · 부가세 10%) 계산이 정확한가요?", detail: `총 합계 ${won(q.grand_total)} (공급가액 ${won(q.total_supply)} + 세액 ${won(q.vat)})` },
-      { id: "c2", title: "2. 납기일 · 납품장소 · 총괄책임자(PM)가 맞나요?", detail: `납기 ${po.due_date || "-"} · 장소 ${c.delivery_location || "-"} · PM ${c.pm_name || "이준호"}` },
-      { id: "c3", title: "3. 계좌번호·주민번호·단가 등 회사 중요정보가 유출되지 않았나요?", detail: `사업자(${companyProfile.biz_no}), 계좌(${companyProfile.bank}) 정합성 및 외부 입력 시 마스킹 확인` },
-      { id: "c4", title: "4. 양식 안의 법적 체크칸('[ ] 예 / 아니오')을 직원이 직접 확인했나요?", detail: "이해충돌·수의계약 제한·보훈/장애인 여부 등은 반드시 담당자가 직접 체크(AI 자동 체크 금지)" },
-      { id: "c5", title: "5. 대표자 도장(직인) 날인 및 필수 첨부파일을 빠짐없이 챙겼나요?", detail: `대표 '${companyProfile.ceo}' 날인 및 내려받은 한글(.hwpx) 파일 최종 열람 확인` },
+      { id: "c1", title: "1. 견적 · 발주 · 품의 금액 및 부가세(10%) 산식 검증", detail: `총 합계 ${won(q.grand_total)} (공급가액 ${won(q.total_supply)} + 부가세 ${won(q.vat)})` },
+      { id: "c2", title: "2. 납기일 · 납품장소 · 총괄책임자(PM) 일치 여부 확인", detail: `납기 ${po.due_date || "-"} · 장소 ${c.delivery_location || "-"} · PM ${c.pm_name || "이준호"}` },
+      { id: "c3", title: "3. 계좌 · 사업자번호 · 원가 등 민감정보 보호 점검", detail: `사업자번호(${companyProfile.biz_no}), 계좌(${companyProfile.bank}) 확인 및 외부 입력 시 마스킹 준수` },
+      { id: "c4", title: "4. 양식 내 법적 서약 체크란([ ] 예/아니오) 담당자 직접 기입", detail: "이해충돌 · 수의계약 제한 · 보훈/여성기업 등 법적 확인 항목은 담당자가 사실 확인 후 직접 표기" },
+      { id: "c5", title: "5. 대표자 직인 날인 및 제출 파일(.hwpx) 열람 최종 확인", detail: `대표자 '${companyProfile.ceo}' 날인 및 생성된 한글 파일 서식 검토` },
     ];
   }
 
@@ -885,36 +1053,36 @@
     const q = c.doc_chain.quotation;
     const po = c.doc_chain.purchase_order;
     const s = c.source_summary || {};
-    const warn = "[보안 주의] 원가·단가·주민번호 등 영업비밀은 사내 보안 AI를 쓰거나 [별표]로 가리고 입력하세요.\n\n";
+    const warn = "[보안 안내] 원가, 단가, 주민등록번호 등 영업비밀 및 개인정보는 사내 보안 LLM에서 실행하거나 비식별 처리 후 입력하십시오.\n\n";
 
     if (key === "step2_draft") {
       return (
         warn +
-        `아래 우리 회사 정보와 요청 양식 빈칸 목록을 비교해서, 각 빈칸에 들어갈 초안을 표로 써줘.\n` +
-        `단, 회사 정보에 없는 금액이나 경력은 절대 지어내지 말고 '[담당자 확인]'으로 비워둬.\n\n` +
-        `[우리 회사] ${companyProfile.name} / 대표 ${companyProfile.ceo} / PM ${c.pm_name || "이준호"} / 연락처 ${companyProfile.phone}\n` +
+        `등록된 기업 정보와 요청 양식의 빈칸 항목을 대조해 각 항목의 초안을 표로 작성하십시오.\n` +
+        `기업 정보에 없는 금액이나 경력은 임의로 작성하지 말고 '[담당자 확인]'으로 표기하십시오.\n\n` +
+        `[기준 기업] ${companyProfile.name} / 대표자 ${companyProfile.ceo} / PM ${c.pm_name || "이준호"} / 연락처 ${companyProfile.phone}\n` +
         `[대상 사업] ${s.document_title || q.project_name}`
       );
     }
     if (key === "step3_change") {
       return (
         warn +
-        `기존 계약 조건과 거래처 수정 요청 메일을 비교해 3가지만 정리해 줘.\n` +
-        `1) 바뀌기 전 vs 바뀐 후 비교표 (금액 차이 포함)\n` +
-        `2) 서류 6종 중 고쳐야 할 서류와 그대로 둘 서류 구분\n` +
-        `3) 거래처 담당자에게 바로 보낼 정중한 답장 메일 초안\n\n` +
+        `기존 계약 조건과 거래처 변경 요청 원문을 비교해 아래 3항목을 정리하십시오.\n` +
+        `1) 항목별 변경 전·후 비교표 (금액 증감 포함)\n` +
+        `2) 관리 서류 6종 중 개정 대상 서류와 원안 유지 서류 구분\n` +
+        `3) 거래처 담당자 수신용 공식 회신 문안\n\n` +
         `[기존 조건] ${q.project_name} | 1번 품목 ${num(q.items[0].qty)}개 | 총액 ${won(q.grand_total)} | 납기 ${po.due_date || "-"} | PM ${c.pm_name || "이준호"}\n` +
-        `[수정 요청] (여기에 이메일이나 카톡 내용을 붙여넣기)`
+        `[변경 요청 원문] (수신 메일 또는 메모 입력)`
       );
     }
     return (
       warn +
-      `아래 공공기관 공고문을 읽고 실무자가 바로 움직일 수 있게 쉬운 말로 3가지만 정리해 줘.\n` +
-      `1) 무슨 사업인지 한 줄 요약 (기관·예산·납기)\n` +
-      `2) 제출해야 하는 서류 목록과 사전에 준비할 자료\n` +
-      `3) 감점되거나 탈락할 수 있는 주의 조항\n\n` +
+      `공공기관 공고문을 분석해 아래 3항목으로 정리하십시오.\n` +
+      `1) 사업 개요 (발주기관, 사업 규모, 납기)\n` +
+      `2) 필수 제출서류 목록 및 사내 사전 준비 정보\n` +
+      `3) 참가자격 제한 및 지체상금 등 검토 유의사항\n\n` +
       `[공고명] ${s.document_title || q.project_name} (${s.issuing_agency || "발주기관"})\n` +
-      `[원문] (공고 내용 붙여넣기)`
+      `[공고 원문] (추출 텍스트 입력)`
     );
   }
 
@@ -924,9 +1092,12 @@
       .map((it) => {
         const done = Boolean(checkedItems[it.id]);
         return `
-        <label class="easy-check-item ${done ? "checked" : ""}">
+        <label class="check-row ${done ? "checked" : ""}">
           <input type="checkbox" data-cid="${esc(it.id)}" ${done ? "checked" : ""} />
-          <div><strong>${esc(it.title)}</strong><div style="font-size:12px;color:#475569;margin-top:2px;">${esc(it.detail)}</div></div>
+          <div>
+            <div class="check-row-title">${esc(it.title)}</div>
+            <div class="check-row-detail">${esc(it.detail)}</div>
+          </div>
         </label>`;
       })
       .join("");
@@ -936,15 +1107,14 @@
       const pct = Math.round((doneCount / items.length) * 100);
       el("easyProgressFill").style.width = `${pct}%`;
       el("easyProgressFill").classList.toggle("done", doneCount === items.length);
-      el("easyProgressText").textContent =
-        doneCount === items.length ? `🎉 ${doneCount} / ${items.length} 모두 확인 완료!` : `${doneCount} / ${items.length} 확인 완료`;
+      el("easyProgressText").textContent = `${doneCount} / ${items.length}건 완료`;
     };
     syncProg();
 
     el("easyChecklistBox").querySelectorAll('input[type="checkbox"]').forEach((cb) => {
       cb.addEventListener("change", () => {
         checkedItems[cb.dataset.cid] = cb.checked;
-        cb.closest(".easy-check-item")?.classList.toggle("checked", cb.checked);
+        cb.closest(".check-row")?.classList.toggle("checked", cb.checked);
         syncProg();
       });
     });
@@ -986,21 +1156,40 @@
     pendingProposal = null;
     checkedItems = {};
 
-    document.querySelectorAll(".case-btn").forEach((b) => {
-      b.classList.toggle("active", b.dataset.caseId === activeCase.id);
-    });
+    populateCaseSelect();
+    if (el("easyScenarioSelect")) el("easyScenarioSelect").value = "";
     el("easyChangeInput").value = "";
-    el("easyApplyChangeBtn").disabled = true;
+    setApplyButtonState(false, 0);
     el("easyCopyReplyBtn").disabled = true;
-    el("easyChangeStatus").textContent = "";
-    el("easyDiffBox").innerHTML = `<div class="info-mini-card" style="color: var(--muted);">위 시연 버튼을 눌러 어떤 숫자와 일정이 바뀌는지 비교해 보세요.</div>`;
-    el("easyReplyBox").textContent = "변경 분석을 실행하면 수정된 서류와 원안 유지 서류가 정리된 답장 메일이 자동 작성됩니다.";
+    el("easyCopyReplyBtn").textContent = "회신 문안 복사";
+    setStatus("easyChangeStatus", "");
+    el("easyDiffBox").innerHTML = `<div class="notice-box">변경 대상 분석을 실행하면 항목별 변경 내역과 금액 증감이 표로 표시됩니다.</div>`;
+    el("easyReplyBox").textContent = "변경 대상 분석을 실행하면 개정 서류와 유지 서류가 구분된 회신 문안이 생성됩니다.";
 
     renderStep1Summary(activeCase);
     renderIdleImpactGrid(activeCase);
     renderRevBadges(activeCase);
     renderEasyBasic4Sheet();
     renderStep4Easy(activeCase);
+  }
+
+  function applyScenarioPreset(sc) {
+    if (!activeCase || !sc) return;
+    const first = activeCase.doc_chain.quotation.items[0];
+    const due = activeCase.doc_chain.purchase_order.due_date || "2026-12-20";
+    if (sc === "pm_change") {
+      const oldPm = activeCase.pm_name || "이준호";
+      const nextPm = oldPm === "박서연" ? "이준호" : "박서연";
+      el("easyChangeInput").value =
+        `발주처 요청으로 총괄책임자(PM)를 기존 ${oldPm} 수석에서 ${nextPm} 책임연구원으로 교체 요청합니다. 견적 금액과 수량은 변동 없습니다.`;
+    } else if (sc === "qty_due") {
+      el("easyChangeInput").value =
+        `담당자님, 1번 품목(${first.name}) 수량을 100개에서 120개로 변경하고 납기는 기존(${due}) 대비 7일 연장 요청드립니다.`;
+    } else if (sc === "due_location") {
+      el("easyChangeInput").value =
+        `납기를 기존(${due}) 대비 10일 연장하고 납품장소는 '제2연구동 1층 계측기 반입구'로 변경 요청드립니다. 금액과 참여인력은 변동 없습니다.`;
+    }
+    runChangeAnalysis();
   }
 
   function bindEvents() {
@@ -1019,14 +1208,13 @@
       }
     );
 
-    document.querySelectorAll(".case-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const found = cases.find((c) => c.id === btn.dataset.caseId);
-        if (found) {
-          selectEasyCase(found);
-          refreshActiveEasyForm();
-        }
-      });
+    el("easyCaseSelect")?.addEventListener("change", (e) => {
+      const found = cases.find((c) => c.id === e.target.value);
+      if (found) {
+        setStatus("easyNoticeStatus", "");
+        selectEasyCase(found);
+        refreshActiveEasyForm();
+      }
     });
 
     const ni = el("easyNoticeInput");
@@ -1034,7 +1222,7 @@
     ni?.addEventListener("change", async (e) => {
       const f = e.target.files?.[0];
       if (!f || !window.HwpBrowserParser) return;
-      el("easyNoticeStatus").textContent = `"${f.name}" 한글 문서를 읽고 있습니다...`;
+      setStatus("easyNoticeStatus", `문서 분석 중: ${f.name}`);
       try {
         const parsed = await window.HwpBrowserParser.parseHwpFile(f);
         const structured = window.HwpBrowserParser.buildFallbackChainFromParsed(parsed);
@@ -1045,10 +1233,10 @@
           source_summary: structured.source_summary,
           doc_chain: structured.doc_chain,
         });
-        el("easyNoticeStatus").textContent = `✅ "${f.name}" 분석 완료! (${parsed.paragraph_count}문단 · ${parsed.table_count}표 읽기 성공)`;
+        setStatus("easyNoticeStatus", `분석 완료: ${f.name} (${parsed.paragraph_count}문단, ${parsed.table_count}표 추출)`);
         refreshActiveEasyForm();
       } catch (err) {
-        el("easyNoticeStatus").textContent = `오류: ${err.message}`;
+        setStatus("easyNoticeStatus", `분석 오류: ${err.message}`, true);
       }
       ni.value = "";
     });
@@ -1083,7 +1271,7 @@
     cfi?.addEventListener("change", async (e) => {
       const f = e.target.files?.[0];
       if (!f) return;
-      await loadFormBuffer(await f.arrayBuffer(), `자동기입_${f.name}`, "custom");
+      await loadFormBuffer(await f.arrayBuffer(), `filled_${f.name}`, "custom");
       cfi.value = "";
     });
 
@@ -1092,9 +1280,9 @@
       try {
         const res = await window.HwpBrowserParser.applySlotPlanToHwpx(activeFormBuffer, activeFormPlan.slots);
         triggerDownloadBlob(res.blob, activeFormFilename);
-        el("easyFormStatus").textContent = `🎉 '${activeFormFilename}' 저장 완료! (총 ${res.filledCount}칸 자동 기입됨)`;
+        setStatus("easyFormStatus", `저장 완료: ${activeFormFilename} (반영 ${res.filledCount}건)`);
       } catch (err) {
-        el("easyFormStatus").textContent = `저장 실패: ${err.message}`;
+        setStatus("easyFormStatus", `저장 실패: ${err.message}`, true);
       }
     });
 
@@ -1102,26 +1290,8 @@
       if (activeCase) exportCsvForErp(activeCase);
     });
 
-    document.querySelectorAll(".easy-sc-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        if (!activeCase) return;
-        const sc = btn.dataset.sc;
-        const first = activeCase.doc_chain.quotation.items[0];
-        const due = activeCase.doc_chain.purchase_order.due_date || "2026-12-20";
-        if (sc === "pm_change") {
-          const oldPm = activeCase.pm_name || "이준호";
-          const nextPm = oldPm === "박서연" ? "이준호" : "박서연";
-          el("easyChangeInput").value =
-            `발주처 요청으로 총괄책임자(PM)를 기존 ${oldPm} 수석에서 ${nextPm} 책임연구원으로 교체해 주세요. 견적 금액과 수량은 변동 없습니다.`;
-        } else if (sc === "qty_due") {
-          el("easyChangeInput").value =
-            `담당자님, 1번 품목(${first.name}) 수량을 100개에서 120개로 늘리고, 납기는 기존(${due}) 대비 7일 연장해 주세요.`;
-        } else {
-          el("easyChangeInput").value =
-            `납기를 기존(${due}) 대비 10일 연장하고, 납품장소는 '제2연구동 1층 계측기 반입구'로 변경해 주세요. 금액·인력은 변동 없습니다.`;
-        }
-        runChangeAnalysis();
-      });
+    el("easyScenarioSelect")?.addEventListener("change", (e) => {
+      if (e.target.value) applyScenarioPreset(e.target.value);
     });
 
     el("easyAnalyzeChangeBtn")?.addEventListener("click", runChangeAnalysis);
@@ -1130,32 +1300,32 @@
       if (!pendingProposal || !pendingProposal.afterCase) return;
       const n = pendingProposal.selectedIds.length;
       activeCase = deepClone(pendingProposal.afterCase);
+      renderStep1Summary(activeCase);
       renderRevBadges(activeCase);
       renderEasyBasic4Sheet();
       renderStep4Easy(activeCase);
       refreshActiveEasyForm();
-      el("easyApplyChangeBtn").disabled = true;
-      el("easyChangeStatus").textContent =
-        `✅ ${n}개 서류만 개정(Rev.2) 반영 완료! 위 STEP 2에서 인력표·계획서를 눌러 바뀐 내용을 바로 확인해 보세요.`;
+      setApplyButtonState(false, 0);
+      setStatus("easyChangeStatus", `개정 반영 완료: 선택 서식 ${n}종이 Rev.2로 갱신되었습니다.`);
     });
 
     el("easyRevertBtn")?.addEventListener("click", () => {
       if (!baselineCase) return;
       selectEasyCase(baselineCase);
       refreshActiveEasyForm();
-      el("easyChangeStatus").textContent = "↺ 모든 서류를 처음 상태(Rev.1)로 되돌렸습니다.";
+      setStatus("easyChangeStatus", "초기 상태(Rev.1)로 복원되었습니다.");
     });
 
     el("easyCopyReplyBtn")?.addEventListener("click", () =>
-      copyTextWithFeedback(el("easyReplyBox")?.textContent || "", el("easyCopyReplyBtn"), "📋 답장 메일 복사하기")
+      copyTextWithFeedback(el("easyReplyBox")?.textContent || "", el("easyCopyReplyBtn"), "회신 문안 복사")
     );
 
     el("easyCopyChecklistBtn")?.addEventListener("click", () => {
       if (!activeCase) return;
       const lines = getChecklistItems(activeCase).map(
-        (it) => `[${checkedItems[it.id] ? "v" : " "}] ${it.title}\n   - ${it.detail}`
+        (it) => `[${checkedItems[it.id] ? "x" : " "}] ${it.title}\n    - ${it.detail}`
       );
-      copyTextWithFeedback(lines.join("\n"), el("easyCopyChecklistBtn"), "📋 확인표 복사하기");
+      copyTextWithFeedback(lines.join("\n"), el("easyCopyChecklistBtn"), "점검 목록 복사");
     });
 
     document.querySelectorAll(".easy-ptab").forEach((b) => {
@@ -1166,7 +1336,7 @@
     });
 
     el("easyCopyPromptBtn")?.addEventListener("click", () =>
-      copyTextWithFeedback(el("easyPromptBox")?.textContent || "", el("easyCopyPromptBtn"), "📋 질문지 복사하기")
+      copyTextWithFeedback(el("easyPromptBox")?.textContent || "", el("easyCopyPromptBtn"), "프롬프트 복사")
     );
   }
 
@@ -1183,7 +1353,7 @@
         loadPresetForm("kimm_sole_source_confirmation_template.hwpx", "수의계약체결제한여부확인서", "kimm");
       }
     } catch (err) {
-      el("easySummaryCards").innerHTML = `<div class="info-mini-card warn">데이터를 불러오지 못했습니다: ${esc(err.message)}</div>`;
+      el("easySummaryCards").innerHTML = `<div class="notice-box warn">데이터를 불러오지 못했습니다: ${esc(err.message)}</div>`;
     }
   }
 
