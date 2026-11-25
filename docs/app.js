@@ -1,7 +1,7 @@
 (function () {
   const BAZE_ENDPOINT = "https://factchat-cloud.mindlogic.ai/v1/gateway/chat/completions";
   const BAZE_MODEL = "gpt-6.1-terra";
-  const ASSET_VER = "20261124d";
+  const ASSET_VER = "20261125a";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -47,6 +47,8 @@
   let activeFormBuffer = null;
   let activeFormFilename = "";
   let activeFormPlan = null;
+  let activePromptKey = "step1_prep";
+  let checkedFinalItems = {};
 
   const el = (id) => document.getElementById(id);
 
@@ -365,6 +367,7 @@
     }
     activeFormBuffer = null;
     activeFormPlan = null;
+    checkedFinalItems = {};
     resetChangeRequestPanel();
     renderAll();
   }
@@ -458,6 +461,19 @@
       ...(s.mandatory_attachments || []).map((x) => `<li><span class="list-key">필수</span> ${esc(x)}</li>`),
     ];
     el("scheduleAttachList").innerHTML = listItems.join("");
+
+    const prepBox = el("prepSummaryBox");
+    if (prepBox) {
+      const firstIt = c.doc_chain?.quotation?.items?.[0];
+      const dueStr = c.doc_chain?.purchase_order?.due_date || "-";
+      const attSummary = (s.mandatory_attachments || []).slice(0, 3).join(", ") || "공고 요구 서류 일체";
+      const requiredDocsText = `${attSummary} / 표준 4종(${c.doc_chain?.quotation?.doc_no || "견적서"} 등) / 기관양식(.hwpx)`;
+      const prepInfoText = `기업 기본현황(${companyProfile.name}, ${companyProfile.biz_no}), 참여인력(PM ${c.pm_name || "이준호"})·실적, 1번 품목 '${firstIt ? firstIt.name : "지정 품목"}' (${firstIt ? num(firstIt.qty) + firstIt.unit : "-"} · 납기 ${dueStr}), 이해충돌·법적 확인 여부`;
+      prepBox.innerHTML = `
+        <div class="prep-summary-row"><strong>① 제출해야 할 서류:</strong> ${esc(requiredDocsText)}</div>
+        <div class="prep-summary-row"><strong>② 사전 준비 정보:</strong> ${esc(prepInfoText)}</div>
+      `;
+    }
 
     el("riskAlertsBox").innerHTML = (s.risk_alerts || [])
       .map(
@@ -751,6 +767,7 @@
       el("liveQtyInput").value = first.qty;
       el("livePriceInput").value = first.unit_price;
     }
+    renderStep5Toolkit(activeCase);
   }
 
   async function tryCallLiveBaze(parsed, apiKey) {
@@ -1061,6 +1078,17 @@
     const filledCount = activeFormPlan.slots.filter((s) => String(s.value || "").trim() !== "").length;
     el("workbenchMetaInfo").textContent =
       `감지된 양식 유형: [${activeFormPlan.formType}] · 표 ${activeFormPlan.tableCount}개 · 자동 매핑 ${filledCount} / ${activeFormPlan.slots.length}개 항목 (${activeFormFilename})`;
+
+    const humanNotice = el("workbenchHumanNotice");
+    if (humanNotice) {
+      const hc = activeFormPlan.humanChecks || {};
+      if ((hc.checkboxCellCount || 0) > 0 || hc.hasSignatureSeal) {
+        humanNotice.innerHTML = `<strong>담당자 직접 확인 보호 (Human-in-the-Loop):</strong> 본 양식 내 선택·법적 서약 체크란(<strong>[ ]</strong> 항목 ${hc.checkboxCellCount || 0}건) 및 <strong>서명·직인란</strong>은 법적 허위기재 방지를 위해 AI가 임의 체크하지 않고 비워두었습니다. 아래 <strong>Step 05 최종 확인 목록</strong>에 따라 담당자가 직접 검토·체크하십시오.`;
+        humanNotice.classList.remove("hidden");
+      } else {
+        humanNotice.classList.add("hidden");
+      }
+    }
 
     const sourceClass = (src) => {
       if (src === "기업자료") return "company";
@@ -1849,6 +1877,159 @@
     renderChangeDiffAndReply(activeCase, afterCase, proposal, selectedDocIds);
   }
 
+  function getFinalChecklistItems(c) {
+    const q = c.doc_chain.quotation;
+    const po = c.doc_chain.purchase_order;
+    const s = c.source_summary || {};
+    const first = q.items[0] || { name: "지정 품목", unit: "식", qty: 1 };
+    const loc = c.delivery_location || c.doc_chain.delivery_inspection?.delivery_location || "발주기관 지정 장소";
+    return [
+      {
+        id: "amount_match",
+        title: "1. 견적·발주·품의 금액 및 부가세(10%) 산식 검증",
+        detail: `총 합계금액 ${won(q.grand_total)} (공급가액 ${won(q.total_supply)} + VAT ${won(q.vat)}), ${q.items.length}개 품목 수량·단가 3-Way 일치 확인`,
+      },
+      {
+        id: "spec_due",
+        title: "2. 요구규격 · 납품기한 · 장소 · 총괄책임자(PM) 대조",
+        detail: `1번 품목 '${first.name}' (${num(first.qty)}${first.unit}) · 납기 ${po.due_date || "-"} · 장소 ${loc} · PM ${c.pm_name || "이준호"}`,
+      },
+      {
+        id: "pii_security",
+        title: "3. 개인정보(주민번호·계좌) 및 사내 원가·기술기밀 유출 점검",
+        detail: `사업자번호(${companyProfile.biz_no}), 계좌(${companyProfile.bank}) 정합성 및 외부 AI 이용 시 민감정보 마스킹(사내 Local sLLM 우선)`,
+      },
+      {
+        id: "legal_oath",
+        title: "4. 법적 확인사항 · 수의계약 제한 · 이해충돌 [ ] 체크란 직접 검토",
+        detail: "연구원·계약담당자와의 이해관계([ ] 예 / [ ] 아니오), 계약사유·보훈·여성·직접생산 등 법적 서약 항목은 담당자가 사실 확인 후 직접 V 표시",
+      },
+      {
+        id: "seal_attach",
+        title: "5. 대표자 서명·직인 날인 및 공고 필수 첨부서류 최종 확인",
+        detail: `대표 '${companyProfile.ceo}' 서명·직인 날인, 내려받은 .hwpx 한컴 한글 열람 점검 및 공고 필수 첨부 ${(s.mandatory_attachments || []).length}건 누락 확인`,
+      },
+    ];
+  }
+
+  function buildStandardPromptText(c, promptKey) {
+    const q = c.doc_chain.quotation;
+    const po = c.doc_chain.purchase_order;
+    const s = c.source_summary || {};
+    const first = q.items[0] || { name: "지정 품목", unit: "식", qty: 1 };
+    const loc = c.delivery_location || c.doc_chain.delivery_inspection?.delivery_location || "발주기관 지정 장소";
+    const securityHeader =
+      "[보안 안내] ※ 단가·원가·주민등록번호·핵심도면 등 영업비밀은 사내 Local sLLM(폐쇄망)에서 실행하거나 [마스킹] 처리 후 입력하십시오.\n\n";
+
+    if (promptKey === "step2_draft") {
+      return (
+        securityHeader +
+        `역할: 대한민국 공공·출연연 납품 중소기업 '${companyProfile.name}' 행정 실무 비서\n` +
+        `입력: 아래 [기업정보]와 [요청 서식 항목]을 대조해 빈 칸에 들어갈 초안만 JSON 또는 항목별 표로 작성하세요.\n` +
+        `원칙:\n` +
+        `1) 기업정보에 없는 단가·인증·경력은 임의로 지어내지 말고 '[담당자 확인 필요]'로 남기세요.\n` +
+        `2) 법적 확인([ ] 예/아니오) 및 서명·날인란은 절대 임의로 체크하지 마세요.\n\n` +
+        `[기업정보]\n` +
+        `- 상호/대표자/사업자번호: ${companyProfile.name} / ${companyProfile.ceo} / ${companyProfile.biz_no}\n` +
+        `- 연락처/주소: ${companyProfile.phone} / ${companyProfile.addr}\n` +
+        `- 총괄책임자(PM) 및 핵심인력: ${c.pm_name || "이준호"} 외 (${companyProfile.est_rev})\n` +
+        `- 보유장비·인증: ${companyProfile.capability} (${companyProfile.certs})\n\n` +
+        `[공고 건명] ${s.document_title || q.project_name} (${s.issuing_agency || "발주기관"})`
+      );
+    }
+
+    if (promptKey === "step3_change") {
+      return (
+        securityHeader +
+        `역할: '${companyProfile.name}' 발주 변경관리 및 회신 초안 작성 AI\n` +
+        `목표: 아래 [기존 계약 상태(Rev.1)]와 [거래처 변경 요청 메일]을 비교해:\n` +
+        `1) 변경 전(Before) vs 변경 후(After) 차이점과 부가세(10%) 포함 금액 증감을 표로 정리하세요.\n` +
+        `2) 관리 서류 6종(견적서·발주서·납품검수조서·지출품의서·인력현황표·사업수행계획서) 중 실제 수정이 필요한 서류(Rev.2)와 원안 유지 서류(Rev.1)를 선별 판정하세요.\n` +
+        `3) 선별 개정 내역과 원안 유지 안내가 명시된 정중한 거래처 공식 회신 메일을 작성하세요.\n\n` +
+        `[기존 계약 상태]\n` +
+        `- 건명: ${q.project_name} (${q.doc_no})\n` +
+        `- 1번 품목/수량/총액: ${first.name} / ${num(first.qty)}${first.unit} / ${won(q.grand_total)}\n` +
+        `- 납기/장소/PM: ${po.due_date || "-"} / ${loc} / ${c.pm_name || "이준호"}\n\n` +
+        `[거래처 변경 요청 원문]\n"(여기에 수신한 이메일·통화 메모를 붙여넣으세요)"`
+      );
+    }
+
+    return (
+      securityHeader +
+      `역할: 한국형 공공·출연연(.hwp/.hwpx) 공고 해독 및 제출 준비 비서\n` +
+      `목표: 아래 파싱된 공고문과 첨부서류 목록을 읽고 중소기업 실무자가 바로 움직일 수 있게 4가지로 정리하세요.\n` +
+      `1) 제출해야 할 서류 체크리스트 (기관 지정 양식 vs 사내 발행 서류 구분)\n` +
+      `2) 사전에 준비할 정보 목록 (기업현황, 인력·실적 증빙, 규격·납기, 법적 확인사항)\n` +
+      `3) 주요 일정(제출마감·납품기한) 및 필수 참가자격·품질요건\n` +
+      `4) 감점·입찰 무효·지체상금 위험이 있는 주의 독소조항(Human-in-the-Loop 경고)\n\n` +
+      `[대상 공고] ${s.issuing_agency || "발주기관"} | ${s.document_title || q.project_name} (${s.notice_number || "-"})\n` +
+      `[파싱 원문 요약]\n"(Step 01에서 추출한 HWP/HWPX 텍스트를 붙여넣으세요)"`
+    );
+  }
+
+  function renderStep5Toolkit(c) {
+    if (!c) return;
+    const box = el("finalChecklistBox");
+    const items = getFinalChecklistItems(c);
+    if (box) {
+      box.innerHTML = items
+        .map((it) => {
+          const isDone = Boolean(checkedFinalItems[it.id]);
+          return `
+            <label class="checklist-item ${isDone ? "checked" : ""}">
+              <input type="checkbox" data-check-id="${esc(it.id)}" ${isDone ? "checked" : ""} />
+              <div>
+                <div class="checklist-title">${esc(it.title)}</div>
+                <div class="checklist-detail">${esc(it.detail)}</div>
+              </div>
+            </label>`;
+        })
+        .join("");
+
+      const updateProgress = () => {
+        const doneCount = items.filter((it) => checkedFinalItems[it.id]).length;
+        if (el("finalCheckProgress")) {
+          el("finalCheckProgress").textContent = `제출 전 필수 확인 ${doneCount} / ${items.length} 완료`;
+        }
+      };
+      updateProgress();
+
+      box.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.addEventListener("change", () => {
+          const cid = cb.dataset.checkId;
+          checkedFinalItems[cid] = cb.checked;
+          cb.closest(".checklist-item")?.classList.toggle("checked", cb.checked);
+          updateProgress();
+        });
+      });
+    }
+
+    document.querySelectorAll(".prompt-tab").forEach((tab) => {
+      tab.classList.toggle("active", tab.dataset.prompt === activePromptKey);
+    });
+    const promptBox = el("promptTemplateBox");
+    if (promptBox) {
+      promptBox.textContent = buildStandardPromptText(c, activePromptKey);
+    }
+  }
+
+  async function copyTextWithFeedback(txt, btn, defaultLabel, fallbackStatusEl) {
+    if (!txt) return;
+    try {
+      await navigator.clipboard.writeText(txt);
+      if (btn) {
+        btn.textContent = "복사 완료";
+        setTimeout(() => {
+          btn.textContent = defaultLabel;
+        }, 1600);
+      }
+    } catch (_) {
+      if (fallbackStatusEl) {
+        fallbackStatusEl.textContent = "클립보드 접근이 제한되어 텍스트를 직접 드래그해 복사하세요.";
+      }
+    }
+  }
+
   async function loadPresetHwpxIntoWorkbench(templateFile, downloadSuffix) {
     if (!activeCase) return;
     const status = el("templateStatusLine");
@@ -1900,6 +2081,7 @@
           applyProfileToCase(activeCase);
           renderSheet(activeCase);
           refreshOpenWorkbenchIfVisible();
+          renderStep5Toolkit(activeCase);
           if (pendingProposal) {
             applyProfileToCase(pendingProposal.afterCase);
             el("replyDraftBox").textContent = buildReplyEmailDraft(
@@ -1922,6 +2104,7 @@
         applyProfileToCase(activeCase);
         renderSheet(activeCase);
         refreshOpenWorkbenchIfVisible();
+        renderStep5Toolkit(activeCase);
       }
     });
 
@@ -1949,6 +2132,7 @@
       renderCrossCheck(activeCase);
       renderSheet(activeCase);
       refreshOpenWorkbenchIfVisible();
+      renderStep5Toolkit(activeCase);
     };
     el("liveQtyInput").addEventListener("input", onSotChange);
     el("livePriceInput").addEventListener("input", onSotChange);
@@ -1983,6 +2167,9 @@
     el("presetFormPlanBtn")?.addEventListener("click", () => {
       const revs = activeCase ? ensureDocRevisions(activeCase) : { form_project_plan: 1 };
       loadPresetHwpxIntoWorkbench("agency_project_plan_template.hwpx", `Rev${revs.form_project_plan}_사업수행계획서`);
+    });
+    el("presetFormKimmBtn")?.addEventListener("click", () => {
+      loadPresetHwpxIntoWorkbench("kimm_sole_source_confirmation_template.hwpx", "수의계약체결제한여부확인서");
     });
 
     // User Custom HWPX Template Upload & Structural Slot Analysis
@@ -2072,18 +2259,29 @@
       el("changeStatusLine").textContent = "[복원] 관리 대상 6종 서류 모두 최초 기안 상태(Rev.1)로 되돌렸습니다.";
     });
 
-    el("copyReplyBtn")?.addEventListener("click", async () => {
+    el("copyReplyBtn")?.addEventListener("click", () => {
       const txt = el("replyDraftBox")?.textContent || "";
-      if (!txt) return;
-      try {
-        await navigator.clipboard.writeText(txt);
-        el("copyReplyBtn").textContent = "복사 완료";
-        setTimeout(() => {
-          el("copyReplyBtn").textContent = "회신 초안 복사";
-        }, 1600);
-      } catch (_) {
-        el("changeStatusLine").textContent = "클립보드 접근이 제한되어 텍스트를 직접 드래그해 복사하세요.";
-      }
+      copyTextWithFeedback(txt, el("copyReplyBtn"), "회신 초안 복사", el("changeStatusLine"));
+    });
+
+    document.querySelectorAll(".prompt-tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        activePromptKey = tab.dataset.prompt || "step1_prep";
+        if (activeCase) renderStep5Toolkit(activeCase);
+      });
+    });
+
+    el("copyChecklistBtn")?.addEventListener("click", () => {
+      if (!activeCase) return;
+      const lines = getFinalChecklistItems(activeCase).map(
+        (it) => `[${checkedFinalItems[it.id] ? "v" : " "}] ${it.title}\n   - ${it.detail}`
+      );
+      copyTextWithFeedback(lines.join("\n"), el("copyChecklistBtn"), "확인 목록 복사", el("changeStatusLine"));
+    });
+
+    el("copyPromptBtn")?.addEventListener("click", () => {
+      const txt = el("promptTemplateBox")?.textContent || "";
+      copyTextWithFeedback(txt, el("copyPromptBtn"), "프롬프트 복사", el("changeStatusLine"));
     });
 
     el("openQrBtn").addEventListener("click", () => el("qrModal").classList.add("open"));

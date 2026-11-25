@@ -473,6 +473,7 @@
   }
 
   const SEMANTIC_RULES = [
+    [/^(발주날짜|발주일자|제출일자|작성일자|견적일자|서약일자)/, "DOC_DATE", "공고·서식 연동"],
     [/^(담당자.*연락처|연락처.*담당자)/, "CONTACT_COMBINED", "기업자료"],
     [/^(설립|매출|상시인원|종업원)/, "EST_REV", "기업자료"],
     [/^(상호|법인명|업체명|제출업체|공급자|회사명)/, "COMPANY_NAME", "기업자료"],
@@ -486,7 +487,7 @@
     [/^(총괄책임|연구책임|책임자|PM)/i, "PM_NAME", "기업자료"],
     [/^(발주.*기관|공고기관|제출기관|수신처|발주처)/, "ISSUING_AGENCY", "공고·서식 연동"],
     [/^(공고.*번호|관리번호|문서번호)/, "NOTICE_NO", "공고·서식 연동"],
-    [/^(사업.*명|과제명|건명|품의제목|용역명)/, "PROJECT_NAME", "공고·서식 연동"],
+    [/^(사업.*명|과제명|건명|계약명|발주내용|품의제목|용역명)/, "PROJECT_NAME", "공고·서식 연동"],
     [/^(납기|납품.*기한|수행기한|계약기한|수행기간)/, "DUE_DATE", "공고·서식 연동"],
     [/^(납품.*장소|납품처|설치장소|수행장소)/, "DELIVERY_LOCATION", "공고·서식 연동"],
     [/^(제안총액|합계금액|총합계금액|총액|견적금액|품의요청총액)/, "GRAND_TOTAL", "공고·서식 연동"],
@@ -525,6 +526,94 @@
     return txt === "" || txt === "-" || txt === "()" || /^\(?\s*(기재|작성|공란)?\s*\)?$/.test(txt);
   }
 
+  function isBlueHexColor(hexStr) {
+    const clean = String(hexStr || "").trim().replace(/^#/, "");
+    if (!/^[0-9a-fA-F]{6}$/.test(clean)) return false;
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return b >= 160 && r <= 80 && g <= 120;
+  }
+
+  async function parseHeaderBlueCharMap(zip) {
+    const blueCharPrIds = new Set();
+    const blackFallbackMap = new Map();
+    const headerEntry = Object.keys(zip.files).find((n) => /^Contents\/header\.xml$/i.test(n));
+    if (!headerEntry) {
+      return { blueCharPrIds, blackFallbackMap };
+    }
+    const xmlStr = await zip.files[headerEntry].async("string");
+    const domParser = new DOMParser();
+    const doc = domParser.parseFromString(xmlStr, "application/xml");
+    if (doc.getElementsByTagName("parsererror").length > 0) {
+      return { blueCharPrIds, blackFallbackMap };
+    }
+    const blueChars = [];
+    const blackChars = [];
+    for (const el of doc.getElementsByTagName("*")) {
+      if (localName(el) !== "charPr") continue;
+      const id = el.getAttribute("id");
+      if (!id) continue;
+      const textColor = String(el.getAttribute("textColor") || "").trim();
+      const height = String(el.getAttribute("height") || "");
+      const borderFillIDRef = String(el.getAttribute("borderFillIDRef") || "");
+      if (isBlueHexColor(textColor)) {
+        blueCharPrIds.add(id);
+        blueChars.push({ id, height, borderFillIDRef });
+      } else if (/^#?000000$/i.test(textColor)) {
+        blackChars.push({ id, height, borderFillIDRef });
+      }
+    }
+    if (blackChars.length > 0) {
+      blueChars.forEach((bc) => {
+        const exactMatch = blackChars.find(
+          (k) => k.height === bc.height && k.borderFillIDRef === bc.borderFillIDRef
+        );
+        const heightMatch = blackChars.find((k) => k.height === bc.height);
+        const chosen = exactMatch || heightMatch || blackChars[0];
+        if (chosen) blackFallbackMap.set(bc.id, chosen.id);
+      });
+    }
+    return { blueCharPrIds, blackFallbackMap };
+  }
+
+  function getElementRuns(el) {
+    const runs = [];
+    for (const node of el.getElementsByTagName("*")) {
+      if (localName(node) === "run") runs.push(node);
+    }
+    return runs;
+  }
+
+  function isFillableValueCell(tcEl, txt, blueCharPrIds) {
+    if (/\[\s*\]|□|☑/.test(txt)) return false;
+    if (isBlankCellText(txt)) return true;
+    if (txt.length <= 42 && /(\s|^)(기재|작성\s*요망|입력\s*요망|기입)\s*$/.test(txt)) {
+      return true;
+    }
+    if (txt.length <= 42 && blueCharPrIds && blueCharPrIds.size > 0) {
+      const nonEmptyRuns = getElementRuns(tcEl).filter(
+        (rn) => collectElementText(rn).length > 0
+      );
+      if (
+        nonEmptyRuns.length > 0 &&
+        nonEmptyRuns.every((rn) => blueCharPrIds.has(rn.getAttribute("charPrIDRef") || ""))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function formatKoreanDateValue(rawDate) {
+    const m = String(rawDate || "").match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+    if (m) {
+      return `${m[1]}년 ${String(m[2]).padStart(2, "0")}월 ${String(m[3]).padStart(2, "0")}일`;
+    }
+    const clean = String(rawDate || "").trim();
+    return clean || "2026년 11월 25일";
+  }
+
   function normalizeLabelForMatch(raw) {
     return String(raw || "")
       .replace(/^\s*\d+\.\s*/, "")
@@ -540,9 +629,43 @@
     return null;
   }
 
+  function turnRunsBlack(runs, blackFallbackMap) {
+    if (!blackFallbackMap || blackFallbackMap.size === 0) return;
+    runs.forEach((rn) => {
+      const cid = rn.getAttribute("charPrIDRef");
+      if (cid && blackFallbackMap.has(cid)) {
+        rn.setAttribute("charPrIDRef", blackFallbackMap.get(cid));
+      }
+    });
+  }
+
+  function setRunText(runEl, value) {
+    const tNodes = [];
+    for (const node of runEl.getElementsByTagName("*")) {
+      if (localName(node) === "t") {
+        tNodes.push(node);
+      }
+    }
+    if (tNodes.length > 0) {
+      tNodes[0].textContent = value;
+      for (let i = 1; i < tNodes.length; i += 1) {
+        tNodes[i].textContent = "";
+      }
+      return true;
+    }
+    const ns = runEl.namespaceURI || "http://www.hancom.co.kr/hwpml/2011/paragraph";
+    const tEl = runEl.ownerDocument.createElementNS(ns, "hp:t");
+    tEl.textContent = value;
+    runEl.appendChild(tEl);
+    return true;
+  }
+
   function detectRepeatingTableKind(headerTexts) {
     const joined = headerTexts.join(" ");
     if (!joined.trim()) return null;
+    if (/퇴직자|입사일/.test(joined)) {
+      return null;
+    }
     if (/(성명|이름|참여인력)/.test(joined) && /(직급|역할|경력|학위|구분)/.test(joined)) {
       return "staff";
     }
@@ -602,6 +725,7 @@
     }
 
     const zip = await global.JSZip.loadAsync(uint8);
+    const { blueCharPrIds } = await parseHeaderBlueCharMap(zip);
     const sectionFiles = Object.keys(zip.files)
       .filter((n) => /^Contents\/section\d+\.xml$/i.test(n))
       .sort((a, b) => parseInt(a.match(/\d+/)[0], 10) - parseInt(b.match(/\d+/)[0], 10));
@@ -610,6 +734,7 @@
     const slots = [];
     const seenTokens = new Set();
     let totalTables = 0;
+    let checkboxCellCount = 0;
     const allTexts = [];
 
     const phMap = (contextPool && contextPool.placeholders) || {};
@@ -702,15 +827,22 @@
         }
       });
 
-      // Pass 3: Key-value pairs (horizontal & vertical section-header rows)
+      // Pass 3: Key-value pairs (horizontal & vertical section-header rows) + standalone instructional cells
       tblEls.forEach((tbl, tblIdx) => {
         if (consumedTables.has(tblIdx)) return;
         const trEls = Array.from(tbl.children).filter((c) => localName(c) === "tr");
+        const usedCells = new Set();
 
         for (let r = 0; r < trEls.length; r += 1) {
           const cells = Array.from(trEls[r].children).filter((c) => localName(c) === "tc");
+          cells.forEach((tc) => {
+            const cellTxt = collectElementText(tc);
+            if (/\[\s*\]|□/.test(cellTxt)) {
+              checkboxCellCount += 1;
+            }
+          });
 
-          // 3A. Vertical 1-col header cell followed by 1-col blank narrative cell
+          // 3A. Vertical 1-col header cell followed by 1-col fillable cell
           if (cells.length === 1 && r + 1 < trEls.length) {
             const nextCells = Array.from(trEls[r + 1].children).filter((c) => localName(c) === "tc");
             if (nextCells.length === 1) {
@@ -720,10 +852,11 @@
                 headerTxt &&
                 headerTxt.length <= 60 &&
                 !/\{\{/.test(headerTxt) &&
-                isBlankCellText(bodyTxt)
+                isFillableValueCell(nextCells[0], bodyTxt, blueCharPrIds)
               ) {
                 const matched = matchSemanticRule(headerTxt);
                 const val = matched && kvMap[matched.key] != null ? String(kvMap[matched.key]) : "";
+                usedCells.add(`${r + 1}_0`);
                 slots.push({
                   id: `kv_${tblIdx}_${r + 1}_0`,
                   kind: "kv_cell",
@@ -742,15 +875,16 @@
             }
           }
 
-          // 3B. Horizontal label -> blank adjacent value cell
+          // 3B. Horizontal label -> fillable adjacent value cell
           for (let c = 0; c < cells.length - 1; c += 1) {
             const labelTxt = collectElementText(cells[c]);
             const nextTxt = collectElementText(cells[c + 1]);
             if (!labelTxt || labelTxt.length > 36 || /\{\{/.test(labelTxt)) continue;
-            if (!isBlankCellText(nextTxt)) continue;
+            if (!isFillableValueCell(cells[c + 1], nextTxt, blueCharPrIds)) continue;
 
             const matched = matchSemanticRule(labelTxt);
             const val = matched && kvMap[matched.key] != null ? String(kvMap[matched.key]) : "";
+            usedCells.add(`${r}_${c + 1}`);
             slots.push({
               id: `kv_${tblIdx}_${r}_${c + 1}`,
               kind: "kv_cell",
@@ -765,13 +899,87 @@
               value: val,
             });
           }
+
+          // 3C. Standalone signature / company instructional cells & inline oath date runs
+          for (let c = 0; c < cells.length; c += 1) {
+            if (usedCells.has(`${r}_${c}`)) continue;
+            const tc = cells[c];
+            const cellTxt = collectElementText(tc);
+            if (!cellTxt) continue;
+
+            if (!/\[\s*\]|□/.test(cellTxt) && cellTxt.length <= 36 && /^(업체명|상호|법인명)\s*기재$/.test(cellTxt)) {
+              const val = kvMap.COMPANY_NAME != null ? String(kvMap.COMPANY_NAME) : "";
+              usedCells.add(`${r}_${c}`);
+              slots.push({
+                id: `kv_${tblIdx}_${r}_${c}`,
+                kind: "kv_cell",
+                secFile,
+                tblIdx,
+                rowIdx: r,
+                colIdx: c,
+                key: "COMPANY_NAME",
+                location: `표${tblIdx + 1} ${r + 1}행 ${c + 1}열`,
+                label: "확인인 업체명(하단)",
+                source: val ? "기업자료" : "직접 입력 / AI 매핑 대상",
+                value: val,
+              });
+            } else if (!/\[\s*\]|□/.test(cellTxt) && cellTxt.length <= 44 && /대표자.*기재/.test(cellTxt)) {
+              const suffix = /\(서명\s*또는\s*인\)/.test(cellTxt)
+                ? "  (서명 또는 인)"
+                : /\(인\)/.test(cellTxt)
+                  ? "  (인)"
+                  : "";
+              const ceo = kvMap.CEO_NAME != null ? String(kvMap.CEO_NAME) : "";
+              const val = ceo ? `${ceo}${suffix}` : "";
+              usedCells.add(`${r}_${c}`);
+              slots.push({
+                id: `kv_${tblIdx}_${r}_${c}`,
+                kind: "kv_cell",
+                secFile,
+                tblIdx,
+                rowIdx: r,
+                colIdx: c,
+                key: "CEO_NAME",
+                location: `표${tblIdx + 1} ${r + 1}행 ${c + 1}열`,
+                label: "대표자 성명 · 서명란",
+                source: val ? "기업자료" : "직접 입력 / AI 매핑 대상",
+                value: val,
+              });
+            } else if (cellTxt.length > 40) {
+              const runs = getElementRuns(tc);
+              runs.forEach((rn, runIdx) => {
+                const rTxt = collectElementText(rn);
+                if (/^[\s0-9]*년\s+월\s+일\s*$/.test(rTxt)) {
+                  const korDate = formatKoreanDateValue(kvMap.DOC_DATE);
+                  slots.push({
+                    id: `run_${tblIdx}_${r}_${c}_${runIdx}`,
+                    kind: "run_text",
+                    secFile,
+                    tblIdx,
+                    rowIdx: r,
+                    colIdx: c,
+                    runIdx,
+                    key: "DOC_DATE",
+                    location: `표${tblIdx + 1} ${r + 1}행 서약일`,
+                    label: "서약 · 확인 연월일",
+                    source: "공고·서식 연동",
+                    value: korDate,
+                  });
+                }
+              });
+            }
+          }
         }
       });
     }
 
     const joinedText = allTexts.join(" ");
     let formType = "임의 기관 지정 양식(.hwpx)";
-    if (/업체\s*일반현황|참여인력/.test(joinedText)) {
+    if (/수의계약\s*체결\s*제한/.test(joinedText)) {
+      formType = "수의계약 체결 제한 여부 확인서 (공공·출연연 확인·서약 양식)";
+    } else if (/청렴계약|서약서|확인서/.test(joinedText)) {
+      formType = "입찰 · 계약 확인서 · 서약서";
+    } else if (/업체\s*일반현황|참여인력/.test(joinedText)) {
       formType = "업체 일반현황 · 참여인력 현황표";
     } else if (/사업수행계획서|수행\s*목표/.test(joinedText)) {
       formType = "사업수행계획서";
@@ -779,11 +987,17 @@
       formType = "표준 견적·납품 양식";
     }
 
+    const hasSignatureSeal = /(서명\s*또는\s*인|\(인\)|직인)/.test(joinedText);
+
     return {
       formType,
       tableCount: totalTables,
       sectionCount: sectionFiles.length,
       slots,
+      humanChecks: {
+        checkboxCellCount,
+        hasSignatureSeal,
+      },
     };
   }
 
@@ -797,12 +1011,15 @@
     }
     const uint8 = new Uint8Array(arrayBuffer);
     const inZip = await global.JSZip.loadAsync(uint8);
+    const { blackFallbackMap } = await parseHeaderBlueCharMap(inZip);
     const outZip = new global.JSZip();
     const domParser = new DOMParser();
     const serializer = new XMLSerializer();
 
     const phSlots = (slots || []).filter((s) => s.kind === "placeholder");
-    const cellSlots = (slots || []).filter((s) => s.kind === "kv_cell" || s.kind === "list_cell");
+    const cellSlots = (slots || []).filter(
+      (s) => s.kind === "kv_cell" || s.kind === "list_cell" || s.kind === "run_text"
+    );
     let filledCount = 0;
 
     const names = Object.keys(inZip.files);
@@ -845,7 +1062,16 @@
               const tcs = Array.from(tr.children).filter((c) => localName(c) === "tc");
               const tc = tcs[s.colIdx];
               if (!tc) continue;
-              if (setFirstCellText(tc, String(s.value ?? ""))) {
+              if (s.kind === "run_text") {
+                const runs = getElementRuns(tc);
+                const targetRun = runs[s.runIdx];
+                if (targetRun && setRunText(targetRun, String(s.value ?? ""))) {
+                  turnRunsBlack([targetRun], blackFallbackMap);
+                  domChanged = true;
+                  filledCount += 1;
+                }
+              } else if (setFirstCellText(tc, String(s.value ?? ""))) {
+                turnRunsBlack(getElementRuns(tc), blackFallbackMap);
                 domChanged = true;
                 filledCount += 1;
               }

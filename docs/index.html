@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>충남대 B팀 | HWP·LLM 기반 대전 중소기업 행정서식 자동화 시연</title>
-  <link rel="stylesheet" href="styles.css?v=20261124d" />
+  <link rel="stylesheet" href="styles.css?v=20261125a" />
   <!-- Browser-side pure JS HWP 5.0 (CFB+zlib) & HWPX (ZIP+XML) libraries -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/cfb@1.2.2/cfb.min.js"></script>
@@ -313,6 +313,8 @@
               <p id="eligibilityText"></p>
               <div class="text-block-label">주요 일정 및 필수 서류</div>
               <ul id="scheduleAttachList" class="plain-list"></ul>
+              <div class="text-block-label">AI 정리: 제출해야 할 서류 및 사전 준비 정보</div>
+              <div id="prepSummaryBox" class="prep-summary-box"></div>
             </div>
           </div>
           <div>
@@ -369,6 +371,7 @@
             <button id="presetFormQuoteBtn" type="button" class="btn btn-primary btn-sm">① 표준 견적·납품 양식 분석</button>
             <button id="presetFormStaffBtn" type="button" class="btn btn-sm">② 업체 일반현황 · 인력현황표 분석 <span class="rev-pill" id="formRev_form_company_staff">Rev.1</span></button>
             <button id="presetFormPlanBtn" type="button" class="btn btn-sm">③ 사업수행계획서 요약 분석 <span class="rev-pill" id="formRev_form_project_plan">Rev.1</span></button>
+            <button id="presetFormKimmBtn" type="button" class="btn btn-sm">④ 기계연(KIMM) 수의계약 확인서 분석 (실물)</button>
             <button id="uploadCustomTemplateBtn" type="button" class="btn btn-sm">임의 .hwpx 양식 직접 업로드 분석</button>
             <input id="customTemplateInput" type="file" accept=".hwpx" class="hidden" />
             <button id="downloadErpCsvBtn" type="button" class="btn btn-sm">ERP 일괄등록용 CSV 저장</button>
@@ -385,6 +388,7 @@
                 <button id="closeWorkbenchBtn" type="button" class="btn btn-sm">닫기</button>
               </div>
             </div>
+            <div id="workbenchHumanNotice" class="callout-note hidden" style="margin-bottom: 10px; font-size: 12px;"></div>
             <div id="slotMapTableWrap" class="slot-map-wrap"></div>
           </div>
         </div>
@@ -441,6 +445,35 @@
           </div>
         </div>
       </section>
+
+      <!-- Step 5: Final Human-in-the-Loop Checklist & Reusable Prompt Kit -->
+      <section id="finalCheckPromptCard" class="card">
+        <div class="card-header">
+          <div class="step-badge"><span class="step-num">05</span> 담당자 최종 확인 체크리스트 &amp; 실무자 복사용 표준 프롬프트 키트</div>
+          <span id="finalCheckProgress" class="header-tag">제출 전 필수 확인 0 / 5 완료</span>
+        </div>
+        <div class="grid-2">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 10px; gap: 8px;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--ink);">업무별 담당자 최종 확인 목록 (금액 · 개인정보 · 법적 서약 · 직인 검토)</span>
+              <button id="copyChecklistBtn" type="button" class="btn btn-sm">확인 목록 복사</button>
+            </div>
+            <div id="finalChecklistBox" class="checklist-box"></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 10px; gap: 8px;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--ink);">중소기업 실무자용 복사용 표준 프롬프트 (사내 Local sLLM · 보안 AI 가이드)</span>
+              <button id="copyPromptBtn" type="button" class="btn btn-sm">프롬프트 복사</button>
+            </div>
+            <div class="prompt-tabs">
+              <button type="button" class="btn btn-sm prompt-tab active" data-prompt="step1_prep">① 공고·제출서류 정리</button>
+              <button type="button" class="btn btn-sm prompt-tab" data-prompt="step2_draft">② 기업자료 기반 초안 작성</button>
+              <button type="button" class="btn btn-sm prompt-tab" data-prompt="step3_change">③ 변경요청 비교·회신문</button>
+            </div>
+            <div id="promptTemplateBox" class="reply-box"></div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -459,7 +492,7 @@
     </div>
   </div>
 
-  <script src="hwp_browser_parser.js?v=20261124d"></script>
-  <script src="app.js?v=20261124d"></script>
+  <script src="hwp_browser_parser.js?v=20261125a"></script>
+  <script src="app.js?v=20261125a"></script>
 </body>
 </html>
