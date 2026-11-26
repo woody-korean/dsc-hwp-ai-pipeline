@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126e";
+  const ASSET_VER = "20261126f";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -460,17 +460,30 @@
   }
 
   function renderSourceTag(src) {
-    if (src === "기업자료") return `<span class="state-tag target">기업 정보 DB</span>`;
-    if (src === "공고·서식 연동") return `<span class="state-tag real">공고 · 계약 연동</span>`;
-    if (src === "AI 초안") return `<span class="state-tag real">규칙 초안</span>`;
-    return `<span class="state-tag warn">수동 입력 필요</span>`;
+    if (src === "기업자료") return `<span class="src-dot src-company">기업 정보</span>`;
+    if (src === "공고·서식 연동") return `<span class="src-dot src-notice">공고 · 계약</span>`;
+    if (src === "AI 초안") return `<span class="src-dot src-rule">규칙 초안</span>`;
+    return `<span class="src-dot src-manual">직접 입력</span>`;
   }
 
   function renderEasySlotTable() {
     if (!activeFormPlan) return;
     const filledCount = activeFormPlan.slots.filter((s) => String(s.value || "").trim() !== "").length;
-    el("easyFormTitle").innerHTML =
-      `<span>양식 분류: ${esc(activeFormPlan.formType)}</span><span>자동 매핑: ${filledCount} / ${activeFormPlan.slots.length}건 · 대상 파일: <span class="break-any">${esc(activeFormFilename)}</span></span>`;
+    const hcStat = activeFormPlan.humanChecks || {};
+    const manualCount = (hcStat.checkboxCellCount || 0) + (hcStat.hasSignatureSeal ? 1 : 0);
+    el("easyFormTitle").innerHTML = `
+      <div class="form-stat">
+        <span class="form-stat-k">자동 입력</span>
+        <span class="form-stat-v">${filledCount}<small> / ${activeFormPlan.slots.length}칸</small></span>
+      </div>
+      <div class="form-stat">
+        <span class="form-stat-k">담당자 직접 확인</span>
+        <span class="form-stat-v">${manualCount}<small>칸</small></span>
+      </div>
+      <div class="form-stat form-stat-file">
+        <span class="form-stat-k">${esc(activeFormPlan.formType)}</span>
+        <span class="form-stat-file-name break-any" translate="no">${esc(activeFormFilename)}</span>
+      </div>`;
 
     const notice = el("easyHumanSafetyNotice");
     const hc = activeFormPlan.humanChecks || {};
@@ -483,13 +496,12 @@
     }
 
     el("easySlotTableWrap").innerHTML = `
-      <table class="data-table">
+      <table class="data-table field-table">
         <thead>
           <tr>
-            <th style="width: 24%;">항목명</th>
-            <th style="width: 16%;">양식 위치</th>
-            <th style="width: 16%;">데이터 출처</th>
-            <th style="width: 44%;">자동 입력값 (직접 수정 가능)</th>
+            <th style="width: 30%;">항목 · 양식 위치</th>
+            <th style="width: 18%;">출처</th>
+            <th style="width: 52%;">입력값 (직접 수정 가능)</th>
           </tr>
         </thead>
         <tbody>
@@ -497,8 +509,7 @@
             .map(
               (s, i) => `
             <tr>
-              <td><strong>${esc(s.label)}</strong></td>
-              <td class="slot-meta-sub">${esc(s.location)}</td>
+              <td><strong>${esc(s.label)}</strong><span class="slot-loc">${esc(s.location)}</span></td>
               <td>${renderSourceTag(s.source)}</td>
               <td><input type="text" class="slot-input easy-slot-input" data-idx="${i}" value="${esc(s.value)}" placeholder="필요 시 직접 입력" /></td>
             </tr>`
@@ -561,6 +572,7 @@
     el("easyFormStaffBtn")?.classList.toggle("active", activeFormKey === "staff");
     el("easyFormPlanBtn")?.classList.toggle("active", activeFormKey === "plan");
     el("easyFormBasic4Btn")?.classList.toggle("active", activeFormKey === "basic4");
+    renderDocPicker();
   }
 
   function renderEasyBasic4Sheet() {
@@ -943,6 +955,7 @@
     btn.disabled = !enabled;
     btn.classList.toggle("btn-action-ready", Boolean(enabled));
     btn.textContent = enabled ? `선택 서식 ${selectedCount}종 개정 적용` : "선택 서식 개정 적용";
+    renderImpactBoard();
   }
 
   function renderPendingImpact() {
@@ -1186,8 +1199,13 @@
       el("easyChangeInput").value =
         `발주처 요청으로 총괄책임자(PM)를 기존 ${oldPm} 수석에서 ${nextPm} 책임연구원으로 교체 요청합니다. 견적 금액과 수량은 변동 없습니다.`;
     } else if (sc === "qty_due") {
+      // Scale the item's real quantity (1 SET -> 2 SET, 100개 -> 120개) instead of assuming 100 -> 120.
+      const oldQty = Math.max(1, parseInt(first.qty, 10) || 1);
+      const newQty = oldQty >= 5 ? Math.round(oldQty * 1.2) : oldQty + 1;
+      const unit = ["개", "EA", "SET"].includes(first.unit) ? first.unit : "개";
+      const qtyText = (n) => `${n}${unit}`;
       el("easyChangeInput").value =
-        `담당자님, 1번 품목(${first.name}) 수량을 100개에서 120개로 변경하고 납기는 기존(${due}) 대비 7일 연장 요청드립니다.`;
+        `담당자님, 1번 품목(${first.name}) 수량을 ${qtyText(oldQty)}에서 ${qtyText(newQty)}로 변경하고 납기는 기존(${due}) 대비 7일 연장 요청드립니다.`;
     } else if (sc === "due_location") {
       el("easyChangeInput").value =
         `납기를 기존(${due}) 대비 10일 연장하고 납품장소는 '제2연구동 1층 계측기 반입구'로 변경 요청드립니다. 금액과 참여인력은 변동 없습니다.`;
@@ -1215,6 +1233,8 @@
     if (!(n >= 1 && n <= STEP_COUNT)) n = 1;
     const fromIntro = leaveIntro();
     currentStep = n;
+    const shellEl = document.querySelector(".app-shell");
+    if (shellEl) shellEl.dataset.step = String(n);
     visitedSteps.add(n);
     document.querySelectorAll(".step-panel").forEach((p) => {
       p.classList.toggle("is-current", Number(p.dataset.step) === n);
@@ -1290,6 +1310,8 @@
     const doneCount = items.filter((it) => checkedItems[it.id]).length;
     setState(4, `점검 ${doneCount} / ${items.length}`, doneCount === items.length);
     renderDocBoard(c);
+    renderDocPicker();
+    renderImpactBoard();
   }
 
   function openDocInStep2(id) {
@@ -1613,6 +1635,165 @@
     });
   }
 
+  /* ---------- 2단계 서식 선택 타일, 3단계 개정 판정 보드 ---------- */
+  const PICKER_TILES = [
+    { key: "kimm", group: "기관 제출 양식", name: "수의계약 확인서", sub: "한국기계연구원 · .hwpx", btn: "easyFormKimmBtn" },
+    { key: "staff", group: "기관 제출 양식", name: "업체 일반현황 · 인력표", sub: ".hwpx", btn: "easyFormStaffBtn", revId: "form_company_staff" },
+    { key: "plan", group: "기관 제출 양식", name: "사업수행계획서 요약", sub: ".hwpx", btn: "easyFormPlanBtn", revId: "form_project_plan" },
+    { key: "custom", group: "기관 제출 양식", name: "외부 양식 불러오기…", sub: "다른 기관 .hwpx", btn: "easyCustomFormBtn", ghost: true },
+    { key: "quotation", group: "거래 서식 4종", name: "표준 견적서", sub: "견적 총액", b4: true, revId: "quotation" },
+    { key: "purchase_order", group: "거래 서식 4종", name: "발주 · 작업지시서", sub: "납기", b4: true, revId: "purchase_order" },
+    { key: "delivery_inspection", group: "거래 서식 4종", name: "거래명세 · 검수조서", sub: "검수 품목", b4: true, revId: "delivery_inspection" },
+    { key: "expense_approval", group: "거래 서식 4종", name: "지출결의 · 품의서", sub: "품의 금액", b4: true, revId: "expense_approval" },
+  ];
+
+  function pickerValue(tile, c) {
+    if (!c || !tile.b4) return tile.sub;
+    const dc = c.doc_chain;
+    if (tile.key === "quotation") return won(dc.quotation.grand_total);
+    if (tile.key === "purchase_order") return `납기 ${dc.purchase_order.due_date || "-"}`;
+    if (tile.key === "delivery_inspection") return `검수 품목 ${dc.delivery_inspection.items.length}건`;
+    if (tile.key === "expense_approval") return won(dc.expense_approval.grand_total);
+    return tile.sub;
+  }
+
+  function renderDocPicker() {
+    const box = el("docPicker");
+    if (!box || !activeCase) return;
+    const revs = ensureRevs(activeCase);
+    const isActive = (t) => (t.b4 ? activeFormKey === "basic4" && activeB4Doc === t.key : activeFormKey === t.key);
+    const groups = [...new Set(PICKER_TILES.map((t) => t.group))];
+    box.innerHTML = groups
+      .map(
+        (g) => `
+        <div class="picker-group">
+          <p class="picker-label">${esc(g)}</p>
+          <div class="picker-row">
+            ${PICKER_TILES.filter((t) => t.group === g)
+              .map((t) => {
+                const rev = t.revId ? revs[t.revId] : null;
+                const on = isActive(t);
+                return `
+                <button type="button" class="pick-tile ${on ? "is-active" : ""} ${t.ghost ? "is-ghost" : ""}" data-pick="${esc(t.key)}" aria-pressed="${on}">
+                  <span class="pick-top">
+                    <span class="pick-name">${esc(t.name)}</span>
+                    ${rev ? `<span class="rev-tag ${rev > 1 ? "updated" : ""}">Rev.${rev}</span>` : ""}
+                  </span>
+                  <span class="pick-sub">${esc(pickerValue(t, activeCase))}</span>
+                </button>`;
+              })
+              .join("")}
+          </div>
+        </div>`
+      )
+      .join("");
+  }
+
+  function pickDoc(key) {
+    const tile = PICKER_TILES.find((t) => t.key === key);
+    if (!tile) return;
+    if (tile.b4) {
+      if (activeFormKey !== "basic4") el("easyFormBasic4Btn")?.click();
+      document.querySelector(`.b4-tab[data-doc="${tile.key}"]`)?.click();
+    } else {
+      el(tile.btn)?.click();
+    }
+    renderDocPicker();
+  }
+
+  function impactState() {
+    if (!activeCase) return "idle";
+    const applyBtn = el("easyApplyChangeBtn");
+    if (pendingProposal && applyBtn && !applyBtn.disabled) return "pending";
+    if (revisedDocs(activeCase).length) return "applied";
+    return "idle";
+  }
+
+  function renderImpactBoard() {
+    const board = el("impactBoard");
+    if (!board || !activeCase) return;
+    const revs = ensureRevs(activeCase);
+    const state = impactState();
+    const total = DOC_REGISTRY.length;
+    const rows = pendingProposal?.impactRows || [];
+    const reasonOf = (id) => rows.find((r) => r.id === id)?.reason || "";
+    let head = "";
+    let tiles = "";
+
+    if (state === "pending") {
+      const sel = new Set(pendingProposal.selectedIds);
+      head = `
+        <p class="verdict"><span class="verdict-num">${sel.size}</span><span class="verdict-text">${total}종 중 ${sel.size}종만 개정합니다</span></p>
+        <p class="verdict-sub">나머지 ${total - sel.size}종은 그대로 둡니다. 서류를 눌러 개정 대상을 바꿀 수 있습니다.</p>`;
+      tiles = [...rows]
+        .sort((a, b) => Number(sel.has(b.id)) - Number(sel.has(a.id)))
+        .map((r) => {
+          const on = sel.has(r.id);
+          return `
+          <button type="button" class="rev-tile ${on ? "is-target" : "is-keep"}" data-id="${esc(r.id)}" role="checkbox" aria-checked="${on}">
+            <span class="rev-tile-top">
+              <span class="rev-tile-name">${esc(r.name)}</span>
+              <span class="rev-change">${on ? `Rev.${r.currentRev} → Rev.${r.currentRev + 1}` : `Rev.${r.currentRev} 유지`}</span>
+            </span>
+            <span class="rev-tile-kind">${esc(r.kind)}</span>
+            <span class="rev-tile-reason">${esc(r.reason)}</span>
+          </button>`;
+        })
+        .join("");
+    } else {
+      const changed = DOC_REGISTRY.filter((d) => revs[d.id] > 1);
+      head =
+        state === "applied"
+          ? `<p class="verdict"><span class="verdict-num">${changed.length}</span><span class="verdict-text">${total}종 중 ${changed.length}종을 개정했습니다</span></p>
+             <p class="verdict-sub">개정본만 다시 제출하면 됩니다. 나머지 ${total - changed.length}종은 기존 버전 그대로입니다.</p>`
+          : `<p class="verdict verdict-idle"><span class="verdict-text">변경 요청을 넣으면 6종 중 바꿀 서류만 골라냅니다</span></p>
+             <p class="verdict-sub">위 예시 요청을 누르거나 받은 메일을 붙여 넣으십시오.</p>`;
+      const ordered = state === "applied" ? [...DOC_REGISTRY].sort((a, b) => Number(revs[b.id] > 1) - Number(revs[a.id] > 1)) : DOC_REGISTRY;
+      tiles = ordered.map((d) => {
+        const upd = revs[d.id] > 1;
+        const reason = state === "applied" ? (upd ? reasonOf(d.id) : "변동 없음") : "";
+        return `
+          <div class="rev-tile ${upd ? "is-done" : state === "applied" ? "is-keep" : "is-idle"}">
+            <span class="rev-tile-top">
+              <span class="rev-tile-name">${esc(d.name)}</span>
+              <span class="rev-tag ${upd ? "updated" : ""}">Rev.${revs[d.id]}</span>
+            </span>
+            <span class="rev-tile-kind">${esc(d.kind)}</span>
+            ${reason ? `<span class="rev-tile-reason">${esc(reason)}</span>` : ""}
+          </div>`;
+      }).join("");
+    }
+    board.dataset.state = state;
+    board.innerHTML = `<div class="verdict-wrap">${head}</div><div class="rev-grid">${tiles}</div>`;
+
+    document.querySelectorAll(".ex-btn").forEach((b) => {
+      b.setAttribute("aria-pressed", String(el("easyScenarioSelect")?.value === b.dataset.sc));
+    });
+  }
+
+  function bindRedesignEvents() {
+    el("docPicker")?.addEventListener("click", (e) => {
+      const t = e.target.closest(".pick-tile");
+      if (t) pickDoc(t.dataset.pick);
+    });
+    document.querySelectorAll(".ex-btn").forEach((b) =>
+      b.addEventListener("click", () => {
+        const sel = el("easyScenarioSelect");
+        if (!sel) return;
+        sel.value = b.dataset.sc;
+        sel.dispatchEvent(new Event("change"));
+      })
+    );
+    el("impactBoard")?.addEventListener("click", (e) => {
+      const tile = e.target.closest(".rev-tile[role='checkbox']");
+      if (!tile) return;
+      const cb = el("easyImpactGrid")?.querySelector(`.easy-imp-cb[data-id="${tile.dataset.id}"]`);
+      if (!cb) return;
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event("change"));
+    });
+  }
+
   function bindFlowEvents() {
     window.addEventListener("hashchange", () => {
       const n = stepFromHash();
@@ -1830,6 +2011,7 @@
     bindEvents();
     bindFlowEvents();
     bindIntroEvents();
+    bindRedesignEvents();
     let markReady;
     dataReady = new Promise((r) => (markReady = r));
     try {

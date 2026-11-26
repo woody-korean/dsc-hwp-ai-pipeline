@@ -1770,6 +1770,538 @@ input[type="checkbox"] {
   }
 }
 
+/* ---------- Steps 2-4 redesign: one result per step, no walls ---------- */
+
+/* Page title and company bar only on step 1; later steps start with the work. */
+.flow-on[data-step]:not([data-step="1"]) .page-header,
+.flow-on[data-step]:not([data-step="1"]) .company-panel {
+  display: none;
+}
+
+/* No left-border accent cards anywhere. */
+.data-table tr.row-target td:first-child {
+  border-left: 0;
+}
+
+.text-output-box {
+  border-left-width: 1px;
+  border-left-color: var(--border);
+  background: var(--surface);
+}
+
+.notice-box.warn {
+  border-left-width: 1px;
+  border-left-color: var(--warn-border);
+}
+
+/* Lighter tables: horizontal rules only. */
+.data-table td,
+.data-table th {
+  border-right: 0;
+}
+
+/* Step 2: document tiles replace the two tab rows */
+.flow-on #step2Card > .tab-row-wrap,
+.flow-on #step2Card .basic4-top-bar .tab-bar {
+  display: none;
+}
+
+.flow-on #step2Card .basic4-top-bar {
+  justify-content: flex-end;
+  border-bottom: 0;
+  margin-bottom: 8px;
+}
+
+.doc-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.app-shell:not(.flow-on) .doc-picker,
+.app-shell:not(.flow-on) .impact-board,
+.app-shell:not(.flow-on) .example-row {
+  display: none;
+}
+
+.picker-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+}
+
+.picker-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pick-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick-tile:hover {
+  border-color: #B6BCC4;
+  background: var(--surface-sub);
+}
+
+.pick-tile.is-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.pick-tile.is-ghost {
+  border-style: dashed;
+  background: transparent;
+}
+
+.pick-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pick-name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.pick-tile.is-active .pick-name {
+  color: var(--accent);
+}
+
+.pick-sub {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sub);
+  font-variant-numeric: tabular-nums;
+}
+
+#easyFormTitle.meta-strip {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: end;
+  gap: 8px 40px;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+  margin-bottom: 16px;
+}
+
+.form-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.form-stat-k {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.form-stat-v {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.form-stat-v small {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-sub);
+}
+
+.form-stat + .form-stat .form-stat-v {
+  color: var(--text);
+}
+
+.form-stat-file {
+  justify-self: end;
+  text-align: right;
+}
+
+.form-stat-file-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+#easyHumanSafetyNotice.notice-box.warn {
+  position: relative;
+  padding-left: 32px;
+  border-color: var(--border);
+  background: var(--surface-sub);
+  color: var(--text);
+  font-size: 13px;
+}
+
+#easyHumanSafetyNotice.notice-box.warn::before {
+  content: "";
+  position: absolute;
+  top: 17px;
+  left: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn-text);
+}
+
+#easyHumanSafetyNotice strong {
+  color: var(--warn-text);
+}
+
+.field-table td {
+  vertical-align: middle;
+}
+
+.slot-loc {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-sub);
+}
+
+.src-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+
+.src-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.src-company::before {
+  background: var(--accent);
+}
+
+.src-notice::before {
+  background: var(--done-text);
+}
+
+.src-rule::before {
+  background: var(--text-sub);
+}
+
+.src-manual::before {
+  background: var(--warn-text);
+}
+
+.field-table .slot-input {
+  border-color: transparent;
+  background: var(--surface-sub);
+}
+
+.field-table .slot-input:hover {
+  border-color: var(--border);
+}
+
+.sheet-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+/* Step 3: example buttons, a verdict, and six revision tiles */
+.flow-on .scenario-bar,
+.flow-on #easyImpactGrid {
+  display: none;
+}
+
+.example-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.example-label {
+  margin-right: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.ex-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.impact-board {
+  margin: 24px 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.verdict-wrap {
+  margin-bottom: 16px;
+}
+
+.verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+}
+
+.verdict-num {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  word-break: keep-all;
+}
+
+.verdict-idle .verdict-text {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.verdict-sub {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--text-sub);
+  word-break: keep-all;
+}
+
+.rev-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rev-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+button.rev-tile {
+  cursor: pointer;
+}
+
+.rev-tile-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.rev-tile-name {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+
+.rev-tile-kind {
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.rev-tile-reason {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-sub);
+  word-break: keep-all;
+}
+
+.rev-change {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  white-space: nowrap;
+}
+
+.rev-tile.is-target,
+.rev-tile.is-done {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.rev-tile.is-target .rev-change,
+.rev-tile.is-target .rev-tile-name,
+.rev-tile.is-done .rev-tile-name {
+  color: var(--accent);
+}
+
+.rev-tile.is-target .rev-tile-reason,
+.rev-tile.is-done .rev-tile-reason {
+  color: var(--text);
+}
+
+.rev-tile.is-keep {
+  background: var(--surface-sub);
+}
+
+.rev-tile.is-keep .rev-tile-name {
+  color: var(--text-sub);
+}
+
+.rev-tile.is-idle {
+  background: var(--surface);
+}
+
+#easyDiffBox .data-table tr:not(.row-target) td {
+  color: var(--text-sub);
+}
+
+#easyDiffBox .data-table tr:not(.row-target) td strong {
+  font-weight: 500;
+}
+
+#easyDiffBox .data-table tr.row-target td {
+  background: var(--accent-bg);
+}
+
+/* Step 4: a progress figure, clean checklist, segmented prompt switch */
+#step4Card .progress-label {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+#step4Card .progress-track {
+  height: 6px;
+}
+
+#step4Card .checklist-list {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+#step4Card .check-row:hover {
+  background: var(--surface-sub);
+}
+
+#step4Card .check-row.checked .check-row-title {
+  color: var(--text-sub);
+  text-decoration: line-through;
+  text-decoration-color: var(--border);
+}
+
+.tab-bar-standalone {
+  display: inline-flex;
+  gap: 0;
+  padding: 2px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-sub);
+}
+
+.tab-bar-standalone .tab-btn {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 3px;
+}
+
+.tab-bar-standalone .tab-btn.active {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+@media (max-width: 960px) {
+  .picker-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rev-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #easyFormTitle.meta-strip {
+    grid-template-columns: auto auto;
+  }
+
+  .form-stat-file {
+    grid-column: 1 / -1;
+    justify-self: start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .rev-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .verdict-num {
+    font-size: 36px;
+  }
+
+  .verdict-text {
+    font-size: 17px;
+  }
+
+  .form-stat-v {
+    font-size: 26px;
+  }
+
+  .ex-btn {
+    flex: 1 1 100%;
+  }
+}
+
 /* Guided flow below 1200px: rail becomes a sticky top stepper */
 @media (max-width: 1199px) {
   .flow-layout {
