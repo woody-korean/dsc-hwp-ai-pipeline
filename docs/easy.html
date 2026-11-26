@@ -7,14 +7,17 @@
   <meta name="color-scheme" content="light" />
   <title>공공조달 문서 작성 및 변경 관리 | 충남대학교 B팀</title>
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="easy.css?v=20261126d" />
+  <link rel="stylesheet" href="easy.css?v=20261126e" />
   <!-- Vendored copies of jszip@3.10.1, cfb@1.2.2, pako@2.1.0 so the demo also runs offline -->
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/cfb.min.js"></script>
   <script src="vendor/pako.min.js"></script>
+  <!-- Vendored GSAP 3.12.5 core + Flip (GreenSock standard no-charge license) for the drop-in opening -->
+  <script src="vendor/gsap.min.js"></script>
+  <script src="vendor/Flip.min.js"></script>
 </head>
 <body>
-  <a href="#flowMain" class="skip-link">본문 바로가기</a>
+  <a href="#appMain" class="skip-link">본문 바로가기</a>
   <header class="global-bar">
     <div class="global-bar-inner">
       <div class="brand-group">
@@ -22,19 +25,130 @@
         <span class="brand-meta">충남대학교 B팀 (신수하 · 김우형) · 2026 DSC 공유대학 과제 4 시연 시스템</span>
       </div>
       <nav class="global-nav" aria-label="관련 화면 이동">
+        <a href="#start" class="nav-link">새 공고 넣기</a>
         <a href="공고에서_검수까지_충남대B팀.pdf" target="_blank" rel="noopener" class="nav-link">발표자료 PDF</a>
         <a href="index.html" class="nav-link nav-link-accent">기술·보안 상세 화면</a>
       </nav>
     </div>
   </header>
 
-  <main class="app-shell">
+  <main id="appMain" class="app-shell" tabindex="-1">
     <div class="page-header">
       <h1 class="page-title">공공·출연연 한글 공고 기반 서식 작성 및 변경 관리</h1>
       <p class="page-desc">
         한글 공고문(.hwp, .hwpx)에서 추출한 요건과 사내 등록 정보를 결합해 제출 양식을 자동 입력하고, 사후 변경 요청에 따른 개정 대상 서식을 판별합니다.
       </p>
     </div>
+
+    <section id="introStage" class="intro-stage" aria-labelledby="introTitle" hidden>
+      <div class="intro-head">
+        <h2 id="introTitle" class="intro-title">공고 파일 하나로 거래 서식 네 종류를 만듭니다</h2>
+        <p class="intro-desc">한글 공고(.hwp, .hwpx)를 아래 칸에 끌어다 놓으십시오. 파일은 서버로 보내지 않고 이 브라우저 안에서 읽습니다.</p>
+      </div>
+
+      <div class="intro-grid">
+        <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-describedby="dropHint">
+          <span id="dropGlyph" class="file-glyph file-glyph-lg" data-ext="HWP" aria-hidden="true"><span>HWP</span></span>
+          <p class="drop-title">여기에 공고 파일을 놓으십시오</p>
+          <p id="dropHint" class="drop-hint">.hwp · .hwpx 지원 · 눌러서 파일 선택…</p>
+          <p id="dropError" class="drop-error" role="alert"></p>
+          <input id="introFileInput" type="file" accept=".hwp,.hwpx" class="hidden" />
+        </div>
+
+        <div class="sample-tray">
+          <p class="tray-title">공개 공고 샘플 5건</p>
+          <p class="tray-desc">파일이 없으면 샘플을 끌어다 놓거나 누르십시오.</p>
+          <ul id="sampleTray" class="sample-list">
+            <li>
+              <button type="button" class="sample-file" draggable="true" data-file="kriss_gpu_workstation_spec.hwp">
+                <span class="file-glyph" data-ext="HWP" aria-hidden="true"><span>HWP</span></span>
+                <span class="sample-text">
+                  <span class="sample-name">GPU 워크스테이션 구매규격서</span>
+                  <span class="sample-meta">한국표준과학연구원 · <span translate="no">kriss_gpu_workstation_spec.hwp</span></span>
+                </span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="sample-file" draggable="true" data-file="dapa_uav_bid.hwpx">
+                <span class="file-glyph" data-ext="HWPX" aria-hidden="true"><span>HWPX</span></span>
+                <span class="sample-text">
+                  <span class="sample-name">해안정찰용 무인항공기 구매 공고</span>
+                  <span class="sample-meta">방위사업청 · <span translate="no">dapa_uav_bid.hwpx</span></span>
+                </span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="sample-file" draggable="true" data-file="dapa_tactical_relay_bid.hwpx">
+                <span class="file-glyph" data-ext="HWPX" aria-hidden="true"><span>HWPX</span></span>
+                <span class="sample-text">
+                  <span class="sample-name">전술이동중계기 구매 재공고</span>
+                  <span class="sample-meta">방위사업청 · <span translate="no">dapa_tactical_relay_bid.hwpx</span></span>
+                </span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="sample-file" draggable="true" data-file="dapa_sme_priority_items.hwpx">
+                <span class="file-glyph" data-ext="HWPX" aria-hidden="true"><span>HWPX</span></span>
+                <span class="sample-text">
+                  <span class="sample-name">중소기업자 우선선정 품목지정 공고</span>
+                  <span class="sample-meta">방위사업청 · <span translate="no">dapa_sme_priority_items.hwpx</span></span>
+                </span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="sample-file" draggable="true" data-file="dapa_defense_innov_sme.hwp">
+                <span class="file-glyph" data-ext="HWP" aria-hidden="true"><span>HWP</span></span>
+                <span class="sample-text">
+                  <span class="sample-name">방산혁신기업 선정기업 수정 공고</span>
+                  <span class="sample-meta">방위사업청 · <span translate="no">dapa_defense_innov_sme.hwp</span></span>
+                </span>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div id="introRun" class="intro-run" hidden>
+        <div class="run-head">
+          <p class="run-file"><span id="runFileName" translate="no"></span></p>
+          <p id="runSource" class="run-source"></p>
+        </div>
+        <ol class="run-stages" aria-live="polite">
+          <li class="run-stage" data-stage="1">
+            <span class="run-mark" aria-hidden="true">1</span>
+            <span class="run-body">
+              <span class="run-name">원문 읽기 <span class="run-who">파서</span></span>
+              <span class="run-detail" id="runDetail1">대기</span>
+            </span>
+          </li>
+          <li class="run-stage" data-stage="2">
+            <span class="run-mark" aria-hidden="true">2</span>
+            <span class="run-body">
+              <span class="run-name">거래조건 추출 <span class="run-who">AI</span></span>
+              <span class="run-detail" id="runDetail2">대기</span>
+            </span>
+          </li>
+          <li class="run-stage" data-stage="3">
+            <span class="run-mark" aria-hidden="true">3</span>
+            <span class="run-body">
+              <span class="run-name">계산과 대조 <span class="run-who">코드</span></span>
+              <span class="run-detail" id="runDetail3">대기</span>
+            </span>
+          </li>
+        </ol>
+
+        <div id="introResult" class="intro-result" hidden>
+          <h3 class="result-title">작성된 거래 서식 4종</h3>
+          <div id="resultCards" class="result-cards"></div>
+          <p id="resultNote" class="result-note"></p>
+          <div class="result-actions">
+            <a href="#step1" class="btn btn-primary">1단계부터 결과 확인</a>
+            <a href="#step3" class="btn">변경 요청 넣어 보기</a>
+            <button id="introAgainBtn" type="button" class="btn">다른 공고 넣기</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <div class="flow-layout">
       <aside class="flow-rail" aria-label="업무 처리 단계">
@@ -296,6 +410,6 @@
   </main>
 
   <script src="hwp_browser_parser.js?v=20261126b"></script>
-  <script src="easy.js?v=20261126d"></script>
+  <script src="easy.js?v=20261126e"></script>
 </body>
 </html>

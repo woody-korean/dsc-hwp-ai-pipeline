@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126d";
+  const ASSET_VER = "20261126e";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -1213,6 +1213,7 @@
 
   function showStep(n, opts = {}) {
     if (!(n >= 1 && n <= STEP_COUNT)) n = 1;
+    const fromIntro = leaveIntro();
     currentStep = n;
     visitedSteps.add(n);
     document.querySelectorAll(".step-panel").forEach((p) => {
@@ -1229,6 +1230,11 @@
     const stepTitle = el(`step${n}Title`)?.textContent?.trim();
     if (stepTitle) document.title = `${n}단계 ${stepTitle} | 공공조달 문서 작성 및 변경 관리`;
     renderFlowStatus();
+    if (fromIntro) {
+      window.scrollTo(0, 0);
+      reveal([".flow-rail", ".flow-main"], { opacity: 0, y: 10, duration: 0.35, stagger: 0.08 });
+      return;
+    }
     if (opts.scroll) {
       const main = el("flowMain");
       if (!main) return;
@@ -1298,11 +1304,320 @@
     goToStep(2);
   }
 
+  /* ---------- 첫 화면: 공고 파일을 끌어다 놓으면 3단계를 실제로 실행 ---------- */
+  const gsapLib = window.gsap || null;
+  if (gsapLib && window.Flip) gsapLib.registerPlugin(window.Flip);
+  const prefersReduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const animOK = () => Boolean(gsapLib) && !prefersReduced();
+  const pause = (ms) => new Promise((r) => setTimeout(r, prefersReduced() ? 0 : ms));
+
+  // GSAP ticks on requestAnimationFrame. If frames stall (background tab, slow projector PC),
+  // force every tween to its end state on a timer so content is never left half-faded.
+  function settle(tween, extraMs = 250) {
+    if (!tween) return tween;
+    const ms = (tween.totalDuration ? tween.totalDuration() : 0.5) * 1000 + extraMs;
+    setTimeout(() => {
+      if (tween.progress() < 1) tween.progress(1);
+    }, ms);
+    return tween;
+  }
+
+  function reveal(targets, vars) {
+    if (!animOK()) return null;
+    return settle(gsapLib.from(targets, { ease: "power2.out", clearProps: "opacity,transform", ...vars }));
+  }
+  let introRunning = false;
+  let dataReady = Promise.resolve();
+
+  function isIntroHash() {
+    const h = window.location.hash;
+    return !h || h === "#start";
+  }
+
+  function showIntro() {
+    const shell = document.querySelector(".app-shell");
+    const stage = el("introStage");
+    if (!shell || !stage) return;
+    shell.classList.add("intro-on");
+    stage.hidden = false;
+    document.title = "공고 파일 넣기 | 공공조달 문서 작성 및 변경 관리";
+    reveal(stage.querySelectorAll(".intro-head > *, .drop-zone, .sample-tray"), {
+      opacity: 0, y: 12, duration: 0.45, stagger: 0.06,
+    });
+  }
+
+  function leaveIntro() {
+    const shell = document.querySelector(".app-shell");
+    if (!shell || !shell.classList.contains("intro-on")) return false;
+    shell.classList.remove("intro-on");
+    el("introStage").hidden = true;
+    return true;
+  }
+
+  function setRunStage(n, state, detail) {
+    const li = document.querySelector(`.run-stage[data-stage="${n}"]`);
+    if (!li) return;
+    li.classList.remove("is-active", "is-done", "is-error");
+    if (state) li.classList.add(`is-${state}`);
+    if (detail != null) el(`runDetail${n}`).textContent = detail;
+  }
+
+  function liveQtyCheck(c) {
+    const q = c.doc_chain.quotation.items || [];
+    const po = c.doc_chain.purchase_order.items || [];
+    const di = c.doc_chain.delivery_inspection.items || [];
+    if (!q.length || q.length !== po.length || q.length !== di.length) return false;
+    return q.every((it, i) => {
+      const ordered = Number(di[i].ordered_qty ?? di[i].delivered_qty);
+      return Number(it.qty) === Number(po[i].qty) && Number(it.qty) === ordered;
+    });
+  }
+
+  function flyIntoDropZone(srcBtn) {
+    const from = srcBtn?.querySelector(".file-glyph");
+    const to = el("dropGlyph");
+    if (!from || !to || !window.Flip) return;
+    const r = from.getBoundingClientRect();
+    const clone = from.cloneNode(true);
+    Object.assign(clone.style, {
+      position: "fixed", left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`,
+      margin: "0", zIndex: "60", pointerEvents: "none",
+    });
+    document.body.appendChild(clone);
+    gsapLib.set(to, { opacity: 0 });
+    settle(
+      window.Flip.fit(clone, to, {
+        duration: 0.55, ease: "power3.inOut", scale: true,
+        onComplete: () => {
+          clone.remove();
+          gsapLib.set(to, { opacity: 1 });
+        },
+      })
+    );
+  }
+
+  function renderIntroResult(precomputed) {
+    const c = activeCase;
+    const dc = c.doc_chain;
+    const revs = ensureRevs(c);
+    const loc = dc.delivery_inspection.delivery_location || c.delivery_location || "-";
+    const cards = [
+      { id: "quotation", name: "표준 견적서", k: "견적 총액", v: won(dc.quotation.grand_total) },
+      { id: "purchase_order", name: "발주서 · 작업지시서", k: "납기", v: dc.purchase_order.due_date || "-" },
+      { id: "delivery_inspection", name: "거래명세 · 납품검수조서", k: `검수 품목 ${dc.delivery_inspection.items.length}건`, v: loc },
+      { id: "expense_approval", name: "지출결의 · 내부 품의서", k: "품의 금액", v: won(dc.expense_approval.grand_total) },
+    ];
+    el("resultCards").innerHTML = cards
+      .map(
+        (cd) => `
+        <button type="button" class="result-card" data-doc="${esc(cd.id)}">
+          <span class="result-card-top">
+            <span class="result-card-name">${esc(cd.name)}</span>
+            <span class="rev-tag">Rev.${revs[cd.id]}</span>
+          </span>
+          <span class="result-card-k">${esc(cd.k)}</span>
+          <span class="result-card-v">${esc(cd.v)}</span>
+        </button>`
+      )
+      .join("");
+    el("resultNote").textContent = precomputed
+      ? "견적 단가는 시연용 예시값입니다. 실제 제출 전에 기업 단가와 원문 조건으로 바꾸십시오. 서식을 누르면 내용을 볼 수 있습니다."
+      : "공개 샘플이 아닌 파일은 AI 추출 없이 규칙으로만 정리합니다. 모든 항목을 원문과 대조하십시오.";
+    const box = el("introResult");
+    box.hidden = false;
+    reveal(box.querySelectorAll(".result-title, .result-card, .result-note, .result-actions"), {
+      opacity: 0, y: 14, duration: 0.4, stagger: 0.07,
+    });
+  }
+
+  async function runIntroFile(file, srcBtn) {
+    if (introRunning || !file) return;
+    el("dropError").textContent = "";
+    if (!/\.(hwp|hwpx)$/i.test(file.name)) {
+      el("dropError").textContent = "한글 파일(.hwp, .hwpx)만 읽을 수 있습니다. 파일 형식을 확인하십시오.";
+      return;
+    }
+    introRunning = true;
+    const zone = el("dropZone");
+    zone.classList.add("is-busy");
+    zone.setAttribute("aria-busy", "true");
+
+    const ext = /\.hwpx$/i.test(file.name) ? "HWPX" : "HWP";
+    const glyph = el("dropGlyph");
+    glyph.dataset.ext = ext;
+    glyph.querySelector("span").textContent = ext;
+    if (animOK()) {
+      if (srcBtn) flyIntoDropZone(srcBtn);
+      else settle(gsapLib.fromTo(glyph, { scale: 0.88 }, { scale: 1, duration: 0.4, ease: "back.out(2)", clearProps: "transform" }));
+    }
+
+    const run = el("introRun");
+    run.hidden = false;
+    el("introResult").hidden = true;
+    el("runFileName").textContent = file.name;
+    el("runSource").textContent = "";
+    [1, 2, 3].forEach((n) => setRunStage(n, null, "대기"));
+    document.querySelector('.run-stage[data-stage="2"]')?.classList.remove("is-ai");
+    reveal(run, { opacity: 0, y: 10, duration: 0.3 });
+    run.scrollIntoView({ block: "nearest", behavior: prefersReduced() ? "auto" : "smooth" });
+
+    try {
+      await dataReady;
+      setRunStage(1, "active", "본문과 표를 읽는 중…");
+      const parsed = await window.HwpBrowserParser.parseHwpFile(file);
+      await pause(450);
+      const fmt = /HWPX/i.test(parsed.format_type || "") ? "HWPX" : "HWP 5.0";
+      setRunStage(1, "done", `${fmt} · ${num(parsed.paragraph_count)}문단 · 표 ${num(parsed.table_count)}개`);
+
+      setRunStage(2, "active", "거래조건을 정리하는 중…");
+      const known = cases.find((c) => c.parse_info?.filename === file.name);
+      let caseObj;
+      if (known) {
+        caseObj = known;
+      } else {
+        const structured = window.HwpBrowserParser.buildFallbackChainFromParsed(parsed);
+        caseObj = {
+          id: "uploaded_notice",
+          short_title: file.name,
+          parse_info: parsed,
+          source_summary: structured.source_summary,
+          doc_chain: structured.doc_chain,
+        };
+      }
+      const who = document.querySelector('.run-stage[data-stage="2"] .run-who');
+      if (who) who.textContent = known ? "AI" : "규칙";
+      selectEasyCase(caseObj);
+      refreshActiveEasyForm();
+      await pause(450);
+      const summary = activeCase.source_summary || {};
+      const dueDate = activeCase.doc_chain.purchase_order.due_date || "-";
+      setRunStage(
+        2,
+        "done",
+        `공고번호 ${summary.notice_number || "원문 미기재"} · 납기 ${dueDate} · 품목 ${activeCase.doc_chain.quotation.items.length}건`
+      );
+      if (known) document.querySelector('.run-stage[data-stage="2"]')?.classList.add("is-ai");
+      el("runSource").textContent = known
+        ? "공개 샘플: 사전 추출 결과 (BAZE gpt-6.1-terra)"
+        : "규칙 기반 추출 (LLM 미사용)";
+
+      setRunStage(3, "active", "금액과 수량을 검산하는 중…");
+      await pause(450);
+      const q = activeCase.doc_chain.quotation;
+      const qtyOk = liveQtyCheck(activeCase);
+      setRunStage(
+        3,
+        qtyOk ? "done" : "error",
+        `공급가액 ${won(q.total_supply)} + 부가세 ${won(q.vat)} = ${won(q.grand_total)} · 견적·발주·검수 수량 ${qtyOk ? "일치" : "불일치, 원문 확인 필요"}`
+      );
+      renderIntroResult(Boolean(known));
+    } catch (err) {
+      const active = document.querySelector(".run-stage.is-active");
+      const n = active ? Number(active.dataset.stage) : 1;
+      setRunStage(n, "error", `읽지 못했습니다: ${err.message}. 다른 파일로 다시 시도하십시오.`);
+    } finally {
+      introRunning = false;
+      zone.classList.remove("is-busy");
+      zone.removeAttribute("aria-busy");
+    }
+  }
+
+  async function runSampleFile(filename, btn) {
+    if (introRunning) return;
+    try {
+      const resp = await fetch(`samples/${encodeURIComponent(filename)}?v=${ASSET_VER}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      await runIntroFile(new File([blob], filename), btn);
+    } catch (err) {
+      el("dropError").textContent = `샘플을 불러오지 못했습니다: ${err.message}. 새로고침 후 다시 시도하십시오.`;
+    }
+  }
+
+  function bindIntroEvents() {
+    const stage = el("introStage");
+    const zone = el("dropZone");
+    const input = el("introFileInput");
+    if (!stage || !zone) return;
+
+    zone.addEventListener("click", (e) => {
+      if (e.target !== input) input?.click();
+    });
+    zone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        input?.click();
+      }
+    });
+    input?.addEventListener("change", (e) => {
+      const f = e.target.files?.[0];
+      if (f) runIntroFile(f, null);
+      input.value = "";
+    });
+
+    let depth = 0;
+    stage.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      depth += 1;
+      zone.classList.add("is-over");
+    });
+    stage.addEventListener("dragleave", () => {
+      depth = Math.max(0, depth - 1);
+      if (!depth) zone.classList.remove("is-over");
+    });
+    stage.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    });
+    stage.addEventListener("drop", (e) => {
+      e.preventDefault();
+      depth = 0;
+      zone.classList.remove("is-over");
+      const sample = e.dataTransfer?.getData("text/x-sample-file");
+      if (sample) {
+        const btn = [...document.querySelectorAll(".sample-file")].find((b) => b.dataset.file === sample);
+        runSampleFile(sample, btn);
+        return;
+      }
+      const f = e.dataTransfer?.files?.[0];
+      if (f) runIntroFile(f, null);
+    });
+    // A file dropped next to the program must not make the browser navigate away from the demo.
+    ["dragover", "drop"].forEach((type) =>
+      window.addEventListener(type, (e) => {
+        if (!stage.contains(e.target) && e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+      })
+    );
+
+    const tray = el("sampleTray");
+    tray?.addEventListener("dragstart", (e) => {
+      const b = e.target.closest(".sample-file");
+      if (!b || !e.dataTransfer) return;
+      e.dataTransfer.setData("text/x-sample-file", b.dataset.file);
+      e.dataTransfer.effectAllowed = "copy";
+    });
+    tray?.addEventListener("click", (e) => {
+      const b = e.target.closest(".sample-file");
+      if (b) runSampleFile(b.dataset.file, b);
+    });
+
+    el("resultCards")?.addEventListener("click", (e) => {
+      const card = e.target.closest(".result-card");
+      if (card) openDocInStep2(card.dataset.doc);
+    });
+    el("introAgainBtn")?.addEventListener("click", () => {
+      el("introRun").hidden = true;
+      el("dropError").textContent = "";
+      window.scrollTo({ top: 0, behavior: prefersReduced() ? "auto" : "smooth" });
+      zone.focus({ preventScroll: true });
+    });
+  }
+
   function bindFlowEvents() {
     window.addEventListener("hashchange", () => {
       const n = stepFromHash();
       if (n) showStep(n, { scroll: true });
-      else if (!window.location.hash) showStep(1, { scroll: true });
+      else if (isIntroHash()) showIntro();
     });
     el("docBoardList")?.addEventListener("click", (e) => {
       const row = e.target.closest(".doc-board-row");
@@ -1507,10 +1822,16 @@
 
   async function init() {
     document.querySelector(".app-shell")?.classList.add("flow-on");
-    showStep(stepFromHash() || 1);
+    const startStep = stepFromHash();
+    if (startStep) showStep(startStep);
+    else if (isIntroHash()) showIntro();
+    else showStep(1);
     loadProfile();
     bindEvents();
     bindFlowEvents();
+    bindIntroEvents();
+    let markReady;
+    dataReady = new Promise((r) => (markReady = r));
     try {
       const resp = await fetch(`data/precomputed_cases.json?v=${ASSET_VER}`);
       const bundle = await resp.json();
@@ -1523,6 +1844,7 @@
     } catch (err) {
       el("easySummaryCards").innerHTML = `<div class="notice-box warn">데이터를 불러오지 못했습니다: ${esc(err.message)}</div>`;
     }
+    markReady();
   }
 
   init();
