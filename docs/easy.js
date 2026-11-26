@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126f";
+  const ASSET_VER = "20261126g";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -474,11 +474,11 @@
     el("easyFormTitle").innerHTML = `
       <div class="form-stat">
         <span class="form-stat-k">자동 입력</span>
-        <span class="form-stat-v">${filledCount}<small> / ${activeFormPlan.slots.length}칸</small></span>
+        <span class="form-stat-v"><span class="count-up">${filledCount}</span><small> / ${activeFormPlan.slots.length}칸</small></span>
       </div>
       <div class="form-stat">
         <span class="form-stat-k">담당자 직접 확인</span>
-        <span class="form-stat-v">${manualCount}<small>칸</small></span>
+        <span class="form-stat-v"><span class="count-up">${manualCount}</span><small>칸</small></span>
       </div>
       <div class="form-stat form-stat-file">
         <span class="form-stat-k">${esc(activeFormPlan.formType)}</span>
@@ -526,6 +526,10 @@
         }
       });
     });
+    if (animateFieldsNext) {
+      animateFieldsNext = false;
+      playFieldFill();
+    }
   }
 
   async function loadFormBuffer(buf, outFilename, formKey) {
@@ -1043,6 +1047,7 @@
       setStatus("easyChangeStatus", "변경 요청 내용을 입력하거나 예시 시나리오를 선택하십시오.", true);
       return;
     }
+    scanNext = true;
     const prop = parseChangeText(txt, activeCase);
     const impactRows = computeEasyImpact(activeCase, prop);
     const selectedIds = impactRows.filter((r) => r.impacted).map((r) => r.id);
@@ -1695,7 +1700,9 @@
     if (tile.b4) {
       if (activeFormKey !== "basic4") el("easyFormBasic4Btn")?.click();
       document.querySelector(`.b4-tab[data-doc="${tile.key}"]`)?.click();
+      playSheetIn();
     } else {
+      if (!tile.ghost) animateFieldsNext = true;
       el(tile.btn)?.click();
     }
     renderDocPicker();
@@ -1723,7 +1730,7 @@
     if (state === "pending") {
       const sel = new Set(pendingProposal.selectedIds);
       head = `
-        <p class="verdict"><span class="verdict-num">${sel.size}</span><span class="verdict-text">${total}종 중 ${sel.size}종만 개정합니다</span></p>
+        <p class="verdict"><span class="verdict-num count-up">${sel.size}</span><span class="verdict-text">${total}종 중 ${sel.size}종만 개정합니다</span></p>
         <p class="verdict-sub">나머지 ${total - sel.size}종은 그대로 둡니다. 서류를 눌러 개정 대상을 바꿀 수 있습니다.</p>`;
       tiles = [...rows]
         .sort((a, b) => Number(sel.has(b.id)) - Number(sel.has(a.id)))
@@ -1744,7 +1751,7 @@
       const changed = DOC_REGISTRY.filter((d) => revs[d.id] > 1);
       head =
         state === "applied"
-          ? `<p class="verdict"><span class="verdict-num">${changed.length}</span><span class="verdict-text">${total}종 중 ${changed.length}종을 개정했습니다</span></p>
+          ? `<p class="verdict"><span class="verdict-num count-up">${changed.length}</span><span class="verdict-text">${total}종 중 ${changed.length}종을 개정했습니다</span></p>
              <p class="verdict-sub">개정본만 다시 제출하면 됩니다. 나머지 ${total - changed.length}종은 기존 버전 그대로입니다.</p>`
           : `<p class="verdict verdict-idle"><span class="verdict-text">변경 요청을 넣으면 6종 중 바꿀 서류만 골라냅니다</span></p>
              <p class="verdict-sub">위 예시 요청을 누르거나 받은 메일을 붙여 넣으십시오.</p>`;
@@ -1765,13 +1772,115 @@
     }
     board.dataset.state = state;
     board.innerHTML = `<div class="verdict-wrap">${head}</div><div class="rev-grid">${tiles}</div>`;
+    if (scanNext && state === "pending") {
+      scanNext = false;
+      // Several renders happen in the same tick; animate the final DOM once they settle.
+      setTimeout(playImpactScan, 0);
+    }
 
     document.querySelectorAll(".ex-btn").forEach((b) => {
       b.setAttribute("aria-pressed", String(el("easyScenarioSelect")?.value === b.dataset.sc));
     });
   }
 
+  /* ---------- "it worked" motion: show the work that just happened ---------- */
+  let scanNext = false;
+  let animateFieldsNext = false;
+
+  function countUp(node, to, dur = 0.5) {
+    if (!node || !animOK()) return null;
+    const target = Number(to) || 0;
+    const o = { v: 0 };
+    node.textContent = "0";
+    return settle(
+      gsapLib.to(o, {
+        v: target, duration: dur, ease: "power1.out",
+        onUpdate: () => (node.textContent = String(Math.round(o.v))),
+        onComplete: () => (node.textContent = String(target)),
+      })
+    );
+  }
+
+  function playImpactScan() {
+    const board = el("impactBoard");
+    if (!board || board.dataset.state !== "pending" || !animOK()) return;
+    const tiles = [...board.querySelectorAll(".rev-tile")];
+    const wrap = board.querySelector(".verdict-wrap");
+    const card = el("step3Card");
+    const analyzeBtn = el("easyAnalyzeChangeBtn");
+    const verdictHtml = wrap ? wrap.innerHTML : "";
+    const verdictNum = Number(board.querySelector(".verdict-num")?.textContent || 0);
+
+    tiles.forEach((t) => t.classList.add("scan-pending"));
+    if (wrap) wrap.innerHTML = `<p class="verdict-scan"><span class="scan-bar" aria-hidden="true"></span>서류 ${tiles.length}종을 하나씩 대조하는 중…</p>`;
+    card?.classList.add("scan-lock");
+    analyzeBtn?.classList.add("is-busy");
+
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      tiles.forEach((t) => t.classList.remove("scan-pending", "scan-now"));
+      card?.classList.remove("scan-lock");
+      analyzeBtn?.classList.remove("is-busy");
+      if (wrap) {
+        wrap.innerHTML = verdictHtml;
+        reveal(wrap.querySelectorAll(".verdict, .verdict-sub"), { opacity: 0, y: 6, duration: 0.3, stagger: 0.06 });
+        countUp(wrap.querySelector(".verdict-num"), verdictNum, 0.45);
+      }
+    };
+
+    const step = 0.12;
+    const tl = gsapLib.timeline({ onComplete: finish });
+    tiles.forEach((t, i) => {
+      tl.call(() => t.classList.add("scan-now"), null, i * step);
+      tl.call(() => t.classList.remove("scan-now", "scan-pending"), null, i * step + 0.09);
+      tl.fromTo(t, { scale: 0.97 }, { scale: 1, duration: 0.2, ease: "back.out(2)", clearProps: "transform" }, i * step + 0.09);
+    });
+    tl.to({}, { duration: 0.12 });
+    settle(tl, 300);
+    setTimeout(finish, (tl.totalDuration() + 0.6) * 1000);
+  }
+
+  function playApplyRoll() {
+    const board = el("impactBoard");
+    if (!board || board.dataset.state !== "applied" || !animOK()) return;
+    const tiles = [...board.querySelectorAll(".rev-tile.is-done")];
+    const tl = gsapLib.timeline();
+    tiles.forEach((t, i) => {
+      const tag = t.querySelector(".rev-tag");
+      if (!tag) return;
+      const finalText = tag.textContent;
+      const m = /Rev\.(\d+)/.exec(finalText);
+      const oldText = m ? `Rev.${Math.max(1, Number(m[1]) - 1)}` : finalText;
+      tag.textContent = oldText;
+      tag.classList.remove("updated");
+      const at = 0.15 + i * 0.18;
+      tl.to(tag, { yPercent: -70, opacity: 0, duration: 0.14, ease: "power1.in" }, at);
+      tl.call(() => {
+        tag.textContent = finalText;
+        tag.classList.add("updated");
+      }, null, at + 0.14);
+      tl.fromTo(tag, { yPercent: 70, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.2, ease: "power2.out", clearProps: "transform,opacity" }, at + 0.14);
+      tl.fromTo(t, { scale: 0.97 }, { scale: 1, duration: 0.28, ease: "back.out(2.2)", clearProps: "transform" }, at + 0.14);
+    });
+    countUp(board.querySelector(".verdict-num"), tiles.length, 0.4);
+    settle(tl, 300);
+  }
+
+  function playFieldFill() {
+    if (!animOK()) return;
+    const rows = el("easySlotTableWrap")?.querySelectorAll("tbody tr");
+    if (rows?.length) reveal(rows, { opacity: 0, y: 6, duration: 0.22, stagger: 0.035 });
+    el("easyFormTitle")?.querySelectorAll(".count-up").forEach((n) => countUp(n, n.textContent, 0.55));
+  }
+
+  function playSheetIn() {
+    reveal(el("easyA4Sheet"), { opacity: 0, y: 10, duration: 0.3 });
+  }
+
   function bindRedesignEvents() {
+    el("easyApplyChangeBtn")?.addEventListener("click", () => setTimeout(playApplyRoll, 0));
     el("docPicker")?.addEventListener("click", (e) => {
       const t = e.target.closest(".pick-tile");
       if (t) pickDoc(t.dataset.pick);

@@ -2302,6 +2302,85 @@ button.rev-tile {
   }
 }
 
+/* "It worked" motion: tile-by-tile scan, Rev roll, field fill */
+.rev-tile.scan-pending {
+  border-color: var(--border) !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+
+.rev-tile.scan-pending .rev-tile-name {
+  color: var(--text-sub) !important;
+}
+
+.rev-tile.scan-pending .rev-change,
+.rev-tile.scan-pending .rev-tile-reason {
+  visibility: hidden;
+}
+
+.rev-tile.scan-now {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-bg), inset 0 0 0 1px var(--accent) !important;
+}
+
+.verdict-scan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.scan-bar {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--accent-bg);
+}
+
+.scan-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: scan-slide 0.7s ease-in-out infinite;
+}
+
+@keyframes scan-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.scan-lock #easyApplyChangeBtn,
+.scan-lock #easyRevertBtn {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.rev-tag {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-bar::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+
 /* Guided flow below 1200px: rail becomes a sticky top stepper */
 @media (max-width: 1199px) {
   .flow-layout {
