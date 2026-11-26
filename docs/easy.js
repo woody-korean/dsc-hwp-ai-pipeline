@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126c";
+  const ASSET_VER = "20261126d";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -1226,6 +1226,8 @@
       if (k === n) a.setAttribute("aria-current", "step");
       else a.removeAttribute("aria-current");
     });
+    const stepTitle = el(`step${n}Title`)?.textContent?.trim();
+    if (stepTitle) document.title = `${n}단계 ${stepTitle} | 공공조달 문서 작성 및 변경 관리`;
     renderFlowStatus();
     if (opts.scroll) {
       const main = el("flowMain");
@@ -1234,7 +1236,8 @@
       const railH = wide ? 0 : document.querySelector(".flow-rail")?.offsetHeight || 0;
       const top = main.getBoundingClientRect().top;
       if (top < railH || top > window.innerHeight * 0.4) {
-        window.scrollTo({ top: Math.max(0, window.scrollY + top - railH - 12), behavior: "smooth" });
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: Math.max(0, window.scrollY + top - railH - 12), behavior: reduce ? "auto" : "smooth" });
       }
     }
   }
@@ -1296,7 +1299,11 @@
   }
 
   function bindFlowEvents() {
-    window.addEventListener("hashchange", () => showStep(stepFromHash() || 1, { scroll: true }));
+    window.addEventListener("hashchange", () => {
+      const n = stepFromHash();
+      if (n) showStep(n, { scroll: true });
+      else if (!window.location.hash) showStep(1, { scroll: true });
+    });
     el("docBoardList")?.addEventListener("click", (e) => {
       const row = e.target.closest(".doc-board-row");
       if (row) openDocInStep2(row.dataset.doc);
@@ -1394,12 +1401,21 @@
 
     el("easyDownloadHwpxBtn")?.addEventListener("click", async () => {
       if (!activeFormBuffer || !activeFormPlan) return;
+      const btn = el("easyDownloadHwpxBtn");
+      btn.disabled = true;
+      btn.classList.add("is-busy");
+      btn.setAttribute("aria-busy", "true");
+      setStatus("easyFormStatus", "한글 파일 생성 중…");
       try {
         const res = await window.HwpBrowserParser.applySlotPlanToHwpx(activeFormBuffer, activeFormPlan.slots);
         triggerDownloadBlob(res.blob, activeFormFilename);
         setStatus("easyFormStatus", `저장 완료: ${activeFormFilename} (반영 ${res.filledCount}건)`);
       } catch (err) {
-        setStatus("easyFormStatus", `저장 실패: ${err.message}`, true);
+        setStatus("easyFormStatus", `저장하지 못했습니다: ${err.message}. 양식을 다시 불러온 뒤 시도하십시오.`, true);
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("is-busy");
+        btn.removeAttribute("aria-busy");
       }
     });
 
@@ -1426,11 +1442,43 @@
       setStatus("easyChangeStatus", `개정 반영 완료: 선택 서식 ${n}종이 Rev.2로 갱신되었습니다.`);
     });
 
+    let undoSnapshot = null;
+    const undoBtn = el("easyUndoRevertBtn");
+    const hideUndo = () => {
+      undoSnapshot = null;
+      undoBtn?.classList.add("hidden");
+    };
+
     el("easyRevertBtn")?.addEventListener("click", () => {
       if (!baselineCase) return;
+      undoSnapshot = activeCase ? deepClone(activeCase) : null;
       selectEasyCase(baselineCase);
       refreshActiveEasyForm();
-      setStatus("easyChangeStatus", "초기 상태(Rev.1)로 복원되었습니다.");
+      setStatus("easyChangeStatus", "초기 상태(Rev.1)로 복원했습니다. 실수였다면 '복원 취소'를 누르십시오.");
+      if (undoSnapshot) undoBtn?.classList.remove("hidden");
+    });
+
+    undoBtn?.addEventListener("click", () => {
+      if (!undoSnapshot) return;
+      activeCase = undoSnapshot;
+      hideUndo();
+      renderStep1Summary(activeCase);
+      renderRevBadges(activeCase);
+      renderEasyBasic4Sheet();
+      renderStep4Easy(activeCase);
+      refreshActiveEasyForm();
+      setStatus("easyChangeStatus", "복원을 취소했습니다. 개정 상태를 되돌렸습니다.");
+    });
+
+    ["easyAnalyzeChangeBtn", "easyApplyChangeBtn", "easyScenarioSelect", "easyCaseSelect"].forEach((id) =>
+      el(id)?.addEventListener(id.endsWith("Select") ? "change" : "click", hideUndo)
+    );
+
+    el("easyChangeInput")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        runChangeAnalysis();
+      }
     });
 
     el("easyCopyReplyBtn")?.addEventListener("click", () =>

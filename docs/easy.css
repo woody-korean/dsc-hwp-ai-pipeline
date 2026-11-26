@@ -166,13 +166,6 @@ body {
   gap: 16px;
 }
 
-.rail-label {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-sub);
-}
-
 .step-list {
   list-style: none;
   margin: 0;
@@ -1112,6 +1105,169 @@ body {
   overflow-wrap: break-word;
 }
 
+
+/* Interface quality: focus, targets, motion, wrapping (web-interface-guidelines) */
+html {
+  scroll-padding-top: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+a,
+button,
+select,
+summary,
+label,
+input[type="checkbox"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(35, 75, 128, 0.12);
+}
+
+:where(a, button, select, summary, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tab-btn:focus-visible,
+.step-link:focus-visible,
+.doc-board-row:focus-visible,
+.doc-board-head:focus-visible {
+  outline-offset: -2px;
+}
+
+.flow-main:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -64px;
+  z-index: 100;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+.page-title,
+.section-title {
+  text-wrap: balance;
+}
+
+.page-desc,
+.section-desc,
+.step-done-note {
+  text-wrap: pretty;
+  max-width: 72ch;
+}
+
+.form-select {
+  background-color: var(--surface);
+  color: var(--text);
+}
+
+.field-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-sub);
+  word-break: keep-all;
+}
+
+.field-hint kbd {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-sub);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.btn:active:not(:disabled) {
+  background: #E9ECF0;
+}
+
+.btn-primary:active:not(:disabled) {
+  background: #16304F;
+}
+
+.btn.is-busy::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.8s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.is-busy::before {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.6;
+  }
+}
+
+/* The step kicker repeats the rail once the guided flow runs; drop the eyebrow. */
+.flow-on .section-kicker {
+  display: none;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+@media (max-width: 1199px) {
+  html {
+    scroll-padding-top: 140px;
+  }
+}
+
+@media (max-width: 640px) {
+  .form-select,
+  .form-textarea,
+  .slot-input,
+  .field-item input,
+  .field-item textarea {
+    font-size: 16px;
+  }
+
+  .btn,
+  .btn-sm,
+  .nav-link,
+  .tab-btn {
+    min-height: 44px;
+  }
+
+  .form-select {
+    height: 44px;
+  }
+
+  input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+  }
+}
+
 /* Guided flow below 1200px: rail becomes a sticky top stepper */
 @media (max-width: 1199px) {
   .flow-layout {
@@ -1129,11 +1285,7 @@ body {
     border-bottom: 1px solid var(--border);
   }
 
-  .rail-label {
-    display: none;
-  }
-
-  .step-list {
+    .step-list {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -1231,7 +1383,7 @@ body {
   }
 
   .app-shell {
-    padding: 16px 12px 24px;
+    padding: 16px max(12px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   }
 
   .page-title {
