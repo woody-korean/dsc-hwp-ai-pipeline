@@ -2381,6 +2381,33 @@ button.rev-tile {
   }
 }
 
+/* Odometer digit roll (GSAP): each digit is a 0-9 strip inside a one-line window */
+.odo-col {
+  display: inline-block;
+  height: 1.15em;
+  overflow: hidden;
+  line-height: 1.15em;
+  vertical-align: bottom;
+}
+
+.odo-strip {
+  display: flex;
+  flex-direction: column;
+}
+
+.odo-strip > span {
+  display: block;
+  height: 1.15em;
+  line-height: 1.15em;
+  text-align: center;
+}
+
+.odo-static {
+  display: inline-block;
+  line-height: 1.15em;
+  vertical-align: bottom;
+}
+
 /* Guided flow below 1200px: rail becomes a sticky top stepper */
 @media (max-width: 1199px) {
   .flow-layout {

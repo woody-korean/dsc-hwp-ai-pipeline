@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126g";
+  const ASSET_VER = "20261126h";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -1333,7 +1333,12 @@
 
   /* ---------- 첫 화면: 공고 파일을 끌어다 놓으면 3단계를 실제로 실행 ---------- */
   const gsapLib = window.gsap || null;
-  if (gsapLib && window.Flip) gsapLib.registerPlugin(window.Flip);
+  if (gsapLib) {
+    const plugins = [window.Flip, window.SplitText, window.ScrambleTextPlugin, window.CustomEase].filter(Boolean);
+    if (plugins.length) gsapLib.registerPlugin(...plugins);
+  }
+  // One signature ease for every movement: fast start, long soft landing.
+  const EASE = gsapLib && window.CustomEase ? (window.CustomEase.create("dsc", "0.22, 1, 0.36, 1"), "dsc") : "power2.out";
   const prefersReduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const animOK = () => Boolean(gsapLib) && !prefersReduced();
   const pause = (ms) => new Promise((r) => setTimeout(r, prefersReduced() ? 0 : ms));
@@ -1351,7 +1356,7 @@
 
   function reveal(targets, vars) {
     if (!animOK()) return null;
-    return settle(gsapLib.from(targets, { ease: "power2.out", clearProps: "opacity,transform", ...vars }));
+    return settle(gsapLib.from(targets, { ease: EASE, clearProps: "opacity,transform", ...vars }));
   }
   let introRunning = false;
   let dataReady = Promise.resolve();
@@ -1662,6 +1667,8 @@
     return tile.sub;
   }
 
+  const pickerSeen = {};
+
   function renderDocPicker() {
     const box = el("docPicker");
     if (!box || !activeCase) return;
@@ -1684,7 +1691,7 @@
                     <span class="pick-name">${esc(t.name)}</span>
                     ${rev ? `<span class="rev-tag ${rev > 1 ? "updated" : ""}">Rev.${rev}</span>` : ""}
                   </span>
-                  <span class="pick-sub">${esc(pickerValue(t, activeCase))}</span>
+                  <span class="pick-sub" data-key="${esc(t.key)}">${esc(pickerValue(t, activeCase))}</span>
                 </button>`;
               })
               .join("")}
@@ -1692,6 +1699,14 @@
         </div>`
       )
       .join("");
+    if (currentStep !== 2 || document.querySelector(".app-shell")?.classList.contains("intro-on")) return;
+    box.querySelectorAll(".pick-sub[data-key]").forEach((node) => {
+      const key = node.dataset.key;
+      const now = node.textContent;
+      const before = pickerSeen[key];
+      pickerSeen[key] = now;
+      if (before && before !== now && /\d/.test(now)) rollNumber(node, now, before, 0.7);
+    });
   }
 
   function pickDoc(key) {
@@ -1787,32 +1802,63 @@
   let scanNext = false;
   let animateFieldsNext = false;
 
-  function countUp(node, to, dur = 0.5) {
-    if (!node || !animOK()) return null;
-    const target = Number(to) || 0;
-    const o = { v: 0 };
-    node.textContent = "0";
-    return settle(
-      gsapLib.to(o, {
-        v: target, duration: dur, ease: "power1.out",
-        onUpdate: () => (node.textContent = String(Math.round(o.v))),
-        onComplete: () => (node.textContent = String(target)),
+  // Odometer-style roll: each digit column slides from its old digit to the new one.
+  function rollNumber(node, toText, fromText = "", dur = 0.6) {
+    if (!node) return null;
+    const finalText = String(toText);
+    if (!animOK()) {
+      node.textContent = finalText;
+      return null;
+    }
+    const from = String(fromText).replace(/\D/g, "");
+    const digitsTo = finalText.replace(/\D/g, "").length;
+    const padded = from.padStart(digitsTo, "0").slice(-digitsTo);
+    let di = 0;
+    node.setAttribute("aria-label", finalText);
+    node.innerHTML = [...finalText]
+      .map((ch) => {
+        if (!/\d/.test(ch)) return `<span class="odo-static" aria-hidden="true">${esc(ch)}</span>`;
+        const start = Number(padded[di] || 0);
+        di += 1;
+        const strip = Array.from({ length: 10 }, (_, k) => `<span>${k}</span>`).join("");
+        return `<span class="odo-col" aria-hidden="true"><span class="odo-strip" data-from="${start}" data-to="${ch}">${strip}</span></span>`;
       })
-    );
+      .join("");
+    const strips = [...node.querySelectorAll(".odo-strip")];
+    strips.forEach((st) => gsapLib.set(st, { yPercent: -Number(st.dataset.from) * 10 }));
+    const tl = gsapLib.timeline({
+      onComplete: () => {
+        node.textContent = finalText;
+        node.removeAttribute("aria-label");
+      },
+    });
+    strips.forEach((st, i) => {
+      tl.to(st, { yPercent: -Number(st.dataset.to) * 10, duration: dur, ease: EASE }, (strips.length - 1 - i) * 0.04);
+    });
+    return settle(tl);
+  }
+
+  function countUp(node, to, dur = 0.5) {
+    return rollNumber(node, to, "0", dur);
   }
 
   function playImpactScan() {
     const board = el("impactBoard");
     if (!board || board.dataset.state !== "pending" || !animOK()) return;
-    const tiles = [...board.querySelectorAll(".rev-tile")];
+    const grid = board.querySelector(".rev-grid");
+    const sortedTiles = [...board.querySelectorAll(".rev-tile")];
+    const regIndex = (t) => DOC_REGISTRY.findIndex((d) => d.id === t.dataset.id);
+    const scanTiles = [...sortedTiles].sort((a, b) => regIndex(a) - regIndex(b));
     const wrap = board.querySelector(".verdict-wrap");
     const card = el("step3Card");
     const analyzeBtn = el("easyAnalyzeChangeBtn");
     const verdictHtml = wrap ? wrap.innerHTML : "";
-    const verdictNum = Number(board.querySelector(".verdict-num")?.textContent || 0);
+    const verdictNum = board.querySelector(".verdict-num")?.textContent || "0";
 
-    tiles.forEach((t) => t.classList.add("scan-pending"));
-    if (wrap) wrap.innerHTML = `<p class="verdict-scan"><span class="scan-bar" aria-hidden="true"></span>서류 ${tiles.length}종을 하나씩 대조하는 중…</p>`;
+    // Read the documents in their natural order; the result order comes after.
+    scanTiles.forEach((t) => grid?.appendChild(t));
+    scanTiles.forEach((t) => t.classList.add("scan-pending"));
+    if (wrap) wrap.innerHTML = `<p class="verdict-scan"><span class="scan-bar" aria-hidden="true"></span>서류 ${scanTiles.length}종을 하나씩 대조하는 중…</p>`;
     card?.classList.add("scan-lock");
     analyzeBtn?.classList.add("is-busy");
 
@@ -1820,24 +1866,54 @@
     const finish = () => {
       if (finished) return;
       finished = true;
-      tiles.forEach((t) => t.classList.remove("scan-pending", "scan-now"));
+      scanTiles.forEach((t) => t.classList.remove("scan-pending", "scan-now"));
+      // Changed documents slide to the top of the grid.
+      if (grid && window.Flip) {
+        const state = window.Flip.getState(sortedTiles);
+        sortedTiles.forEach((t) => grid.appendChild(t));
+        settle(window.Flip.from(state, { duration: 0.5, ease: EASE, absolute: false }));
+      } else {
+        sortedTiles.forEach((t) => grid?.appendChild(t));
+      }
       card?.classList.remove("scan-lock");
       analyzeBtn?.classList.remove("is-busy");
-      if (wrap) {
-        wrap.innerHTML = verdictHtml;
-        reveal(wrap.querySelectorAll(".verdict, .verdict-sub"), { opacity: 0, y: 6, duration: 0.3, stagger: 0.06 });
-        countUp(wrap.querySelector(".verdict-num"), verdictNum, 0.45);
+      if (!wrap) return;
+      wrap.innerHTML = verdictHtml;
+      countUp(wrap.querySelector(".verdict-num"), verdictNum, 0.5);
+      const textEl = wrap.querySelector(".verdict-text");
+      if (textEl && window.SplitText) {
+        const split = new window.SplitText(textEl, { type: "chars" });
+        settle(
+          gsapLib.from(split.chars, {
+            opacity: 0, duration: 0.01, stagger: 0.035, ease: "none",
+            onComplete: () => split.revert(),
+          }),
+          200
+        );
       }
+      reveal(wrap.querySelectorAll(".verdict-sub"), { opacity: 0, y: 4, duration: 0.3, delay: 0.35 });
     };
 
-    const step = 0.12;
+    const step = 0.13;
     const tl = gsapLib.timeline({ onComplete: finish });
-    tiles.forEach((t, i) => {
-      tl.call(() => t.classList.add("scan-now"), null, i * step);
-      tl.call(() => t.classList.remove("scan-now", "scan-pending"), null, i * step + 0.09);
-      tl.fromTo(t, { scale: 0.97 }, { scale: 1, duration: 0.2, ease: "back.out(2)", clearProps: "transform" }, i * step + 0.09);
+    scanTiles.forEach((t, i) => {
+      const at = i * step;
+      const label = t.querySelector(".rev-change");
+      const finalLabel = label?.textContent || "";
+      tl.call(() => t.classList.add("scan-now"), null, at);
+      tl.call(() => t.classList.remove("scan-now", "scan-pending"), null, at + 0.1);
+      if (label && window.ScrambleTextPlugin) {
+        tl.call(() => (label.textContent = ""), null, at);
+        tl.to(
+          label,
+          { duration: 0.32, scrambleText: { text: finalLabel, chars: "0123456789REV.→", speed: 0.9 }, ease: "none" },
+          at + 0.1
+        );
+        tl.call(() => (label.textContent = finalLabel), null, at + 0.44);
+      }
+      tl.fromTo(t, { scale: 0.97 }, { scale: 1, duration: 0.22, ease: EASE, clearProps: "transform" }, at + 0.1);
     });
-    tl.to({}, { duration: 0.12 });
+    tl.to({}, { duration: 0.18 });
     settle(tl, 300);
     setTimeout(finish, (tl.totalDuration() + 0.6) * 1000);
   }
@@ -1846,26 +1922,21 @@
     const board = el("impactBoard");
     if (!board || board.dataset.state !== "applied" || !animOK()) return;
     const tiles = [...board.querySelectorAll(".rev-tile.is-done")];
-    const tl = gsapLib.timeline();
     tiles.forEach((t, i) => {
       const tag = t.querySelector(".rev-tag");
       if (!tag) return;
       const finalText = tag.textContent;
       const m = /Rev\.(\d+)/.exec(finalText);
       const oldText = m ? `Rev.${Math.max(1, Number(m[1]) - 1)}` : finalText;
-      tag.textContent = oldText;
       tag.classList.remove("updated");
-      const at = 0.15 + i * 0.18;
-      tl.to(tag, { yPercent: -70, opacity: 0, duration: 0.14, ease: "power1.in" }, at);
-      tl.call(() => {
-        tag.textContent = finalText;
+      tag.textContent = oldText;
+      setTimeout(() => {
         tag.classList.add("updated");
-      }, null, at + 0.14);
-      tl.fromTo(tag, { yPercent: 70, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.2, ease: "power2.out", clearProps: "transform,opacity" }, at + 0.14);
-      tl.fromTo(t, { scale: 0.97 }, { scale: 1, duration: 0.28, ease: "back.out(2.2)", clearProps: "transform" }, at + 0.14);
+        rollNumber(tag, finalText, oldText, 0.45);
+        settle(gsapLib.fromTo(t, { scale: 0.97 }, { scale: 1, duration: 0.3, ease: EASE, clearProps: "transform" }));
+      }, 150 + i * 180);
     });
-    countUp(board.querySelector(".verdict-num"), tiles.length, 0.4);
-    settle(tl, 300);
+    countUp(board.querySelector(".verdict-num"), tiles.length, 0.45);
   }
 
   function playFieldFill() {
