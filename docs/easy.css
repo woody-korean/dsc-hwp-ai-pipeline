@@ -57,7 +57,7 @@ body {
 }
 
 .global-bar-inner {
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 12px 24px;
   display: flex;
@@ -122,18 +122,18 @@ body {
 
 /* Workspace Container */
 .app-shell {
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 24px 24px 32px;
+  padding: 32px 24px 48px;
 }
 
 .page-header {
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
 
 .page-title {
   margin: 0 0 8px;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: -0.02em;
@@ -150,48 +150,252 @@ body {
   word-break: keep-all;
 }
 
-/* 4-Stage Anchor Navigation */
-.workflow-nav {
+/* Guided Flow: step rail + document revision board */
+.flow-layout {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.flow-rail {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rail-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-sub);
+}
+
+.step-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  margin-bottom: 16px;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-.workflow-link {
+.step-item + .step-item {
+  border-top: 1px solid var(--border);
+}
+
+.step-link {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 12px;
   padding: 12px 16px;
-  border-right: 1px solid var(--border);
   color: var(--text);
-  font-size: 14px;
-  font-weight: 600;
   text-decoration: none;
-  word-break: keep-all;
 }
 
-.workflow-link:last-child {
-  border-right: none;
-}
-
-.workflow-link:hover {
+.step-link:hover {
   background: var(--surface-sub);
 }
 
-.workflow-num {
-  color: var(--accent);
+.step-link:focus-visible,
+.doc-board-row:focus-visible,
+.doc-board-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.step-num {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-sub);
+  font-size: 13px;
   font-weight: 700;
-  white-space: nowrap;
+}
+
+.step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.step-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+.step-state {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-sub);
+}
+
+.step-short {
+  display: none;
+}
+
+.step-item.is-done .step-num {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.step-item.is-done .step-state {
+  color: var(--done-text);
+}
+
+.step-item.is-current .step-link {
+  background: var(--accent-bg);
+}
+
+.step-item.is-current .step-num {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+.step-item.is-current .step-name,
+.step-item.is-current .step-short {
+  color: var(--accent);
+}
+
+.doc-board {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.doc-board-head {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  pointer-events: none;
+}
+
+.doc-board-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.doc-board-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.doc-board.has-updates .doc-board-count {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.doc-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.doc-board-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.doc-board-row:hover {
+  background: var(--surface-sub);
+}
+
+.doc-board-row.updated {
+  background: var(--accent-bg);
+}
+
+.doc-board-row.updated .doc-board-name {
+  font-weight: 600;
+}
+
+.doc-board-name {
+  min-width: 0;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+.doc-board-row .rev-tag {
+  flex: 0 0 auto;
+}
+
+.flow-main {
+  min-width: 0;
+}
+
+/* One step on screen at a time once easy.js is running; without JS the long page still works. */
+.flow-on .step-panel {
+  display: none;
+}
+
+.flow-on .step-panel.is-current {
+  display: block;
+}
+
+.app-shell:not(.flow-on) .step-footer {
+  display: none;
+}
+
+.step-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.step-footer .btn {
+  text-decoration: none;
+}
+
+.step-done-note {
+  font-size: 13px;
+  color: var(--text-sub);
+  word-break: keep-all;
 }
 
 /* Company Profile Panel */
 .company-panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   margin-bottom: 24px;
 }
 
@@ -301,7 +505,7 @@ body {
 .section-panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 24px;
   margin-bottom: 24px;
 }
@@ -322,7 +526,7 @@ body {
 
 .section-title {
   margin: 0 0 4px;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.4;
   color: var(--text);
@@ -908,6 +1112,71 @@ body {
   overflow-wrap: break-word;
 }
 
+/* Guided flow below 1200px: rail becomes a sticky top stepper */
+@media (max-width: 1199px) {
+  .flow-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .flow-rail {
+    top: 0;
+    z-index: 20;
+    gap: 8px;
+    margin: 0 -24px;
+    padding: 8px 24px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rail-label {
+    display: none;
+  }
+
+  .step-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .step-item + .step-item {
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
+
+  .step-link {
+    padding: 8px 12px;
+  }
+
+  .doc-board-head {
+    padding: 8px 12px;
+    border-bottom: 0;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .doc-board-head::after {
+    content: "목록 보기";
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .doc-board.open .doc-board-head::after {
+    content: "닫기";
+  }
+
+  .doc-board-list {
+    display: none;
+    max-height: 50vh;
+    overflow-y: auto;
+    border-top: 1px solid var(--border);
+  }
+
+  .doc-board.open .doc-board-list {
+    display: block;
+  }
+}
+
 /* Responsive Breakpoints: 1024px & 390px */
 @media (max-width: 960px) {
   .split-2 {
@@ -921,6 +1190,42 @@ body {
 }
 
 @media (max-width: 640px) {
+  .flow-rail {
+    margin: 0 -12px;
+    padding: 8px 12px;
+  }
+
+  .step-link {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .step-name,
+  .step-state {
+    display: none;
+  }
+
+  .step-short {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-sub);
+    word-break: keep-all;
+  }
+
+  .step-footer .btn {
+    flex: 1 1 100%;
+    height: auto;
+    min-height: 40px;
+    padding: 8px 12px;
+    white-space: normal;
+    text-align: center;
+  }
+
   .global-bar-inner {
     padding: 12px 16px;
   }
@@ -933,23 +1238,9 @@ body {
     font-size: 22px;
   }
 
-  .workflow-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
-  .workflow-link {
-    padding: 10px 12px;
-    font-size: 13px;
-    border-bottom: 1px solid var(--border);
-  }
 
-  .workflow-link:nth-child(2n) {
-    border-right: none;
-  }
 
-  .workflow-link:nth-child(n+3) {
-    border-bottom: none;
-  }
 
   .section-panel {
     padding: 16px;
@@ -997,7 +1288,8 @@ body {
 
   .global-bar,
   .page-header,
-  .workflow-nav,
+  .flow-rail,
+  .step-footer,
   .company-panel,
   #step1Card,
   #step3Card,
@@ -1009,6 +1301,14 @@ body {
   #easyPrintBtn,
   .basic4-top-bar {
     display: none !important;
+  }
+
+  .flow-layout {
+    display: block;
+  }
+
+  .flow-on #step2Card {
+    display: block !important;
   }
 
   .section-panel {

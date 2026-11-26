@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126b";
+  const ASSET_VER = "20261126c";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -1020,6 +1020,7 @@
     setApplyButtonState(selectedIds.length > 0, selectedIds.length);
     el("easyCopyReplyBtn").disabled = false;
     setStatus("easyChangeStatus", `분석 완료: 6종 중 ${selectedIds.length}종 수정 대상, ${6 - selectedIds.length}종 원안 유지`);
+    renderFlowStatus();
   }
 
   function runChangeAnalysis() {
@@ -1108,6 +1109,7 @@
       el("easyProgressFill").style.width = `${pct}%`;
       el("easyProgressFill").classList.toggle("done", doneCount === items.length);
       el("easyProgressText").textContent = `${doneCount} / ${items.length}건 완료`;
+      renderFlowStatus();
     };
     syncProg();
 
@@ -1144,6 +1146,7 @@
     });
     const anyUpd = Object.values(revs).some((v) => v > 1);
     if (el("easyRevertBtn")) el("easyRevertBtn").disabled = !anyUpd;
+    renderFlowStatus();
   }
 
   function selectEasyCase(c) {
@@ -1190,6 +1193,120 @@
         `납기를 기존(${due}) 대비 10일 연장하고 납품장소는 '제2연구동 1층 계측기 반입구'로 변경 요청드립니다. 금액과 참여인력은 변동 없습니다.`;
     }
     runChangeAnalysis();
+  }
+
+  /* ---------- 단계 안내 흐름: 단계 레일, 서류 개정 현황, 해시 이동 ---------- */
+  const STEP_COUNT = 4;
+  const BASIC4_IDS = ["quotation", "purchase_order", "delivery_inspection", "expense_approval"];
+  let currentStep = 1;
+  const visitedSteps = new Set();
+
+  function stepFromHash() {
+    const m = /^#step([1-4])(?:Card)?$/.exec(window.location.hash || "");
+    return m ? Number(m[1]) : null;
+  }
+
+  function goToStep(n) {
+    if (window.location.hash === `#step${n}`) showStep(n, { scroll: true });
+    else window.location.hash = `step${n}`;
+  }
+
+  function showStep(n, opts = {}) {
+    if (!(n >= 1 && n <= STEP_COUNT)) n = 1;
+    currentStep = n;
+    visitedSteps.add(n);
+    document.querySelectorAll(".step-panel").forEach((p) => {
+      p.classList.toggle("is-current", Number(p.dataset.step) === n);
+    });
+    document.querySelectorAll(".step-item").forEach((li) => {
+      const k = Number(li.dataset.step);
+      li.classList.toggle("is-current", k === n);
+      const a = li.querySelector(".step-link");
+      if (!a) return;
+      if (k === n) a.setAttribute("aria-current", "step");
+      else a.removeAttribute("aria-current");
+    });
+    renderFlowStatus();
+    if (opts.scroll) {
+      const main = el("flowMain");
+      if (!main) return;
+      const wide = window.matchMedia("(min-width: 1200px)").matches;
+      const railH = wide ? 0 : document.querySelector(".flow-rail")?.offsetHeight || 0;
+      const top = main.getBoundingClientRect().top;
+      if (top < railH || top > window.innerHeight * 0.4) {
+        window.scrollTo({ top: Math.max(0, window.scrollY + top - railH - 12), behavior: "smooth" });
+      }
+    }
+  }
+
+  function revisedDocs(c) {
+    const revs = ensureRevs(c);
+    return DOC_REGISTRY.filter((d) => revs[d.id] > 1);
+  }
+
+  function renderDocBoard(c) {
+    const list = el("docBoardList");
+    if (!list || !c) return;
+    const revs = ensureRevs(c);
+    list.innerHTML = DOC_REGISTRY.map((d) => {
+      const upd = revs[d.id] > 1;
+      return `
+        <li>
+          <button type="button" class="doc-board-row ${upd ? "updated" : ""}" data-doc="${esc(d.id)}">
+            <span class="doc-board-name">${esc(d.name)}</span>
+            <span class="rev-tag ${upd ? "updated" : ""}">Rev.${revs[d.id]}</span>
+          </button>
+        </li>`;
+    }).join("");
+    const n = revisedDocs(c).length;
+    el("docBoardCount").textContent = n ? `개정 ${n}종 · 유지 ${DOC_REGISTRY.length - n}종` : `${DOC_REGISTRY.length}종 모두 Rev.1`;
+    el("docBoard")?.classList.toggle("has-updates", n > 0);
+  }
+
+  function renderFlowStatus() {
+    const c = activeCase;
+    if (!c) return;
+    const setState = (n, text, done) => {
+      const node = el(`stepState${n}`);
+      if (node) node.textContent = text;
+      document.querySelector(`.step-item[data-step="${n}"]`)?.classList.toggle("is-done", Boolean(done));
+    };
+    setState(1, "공고 분석 완료", true);
+    setState(2, visitedSteps.has(2) ? "서식 확인함" : "확인 전", visitedSteps.has(2));
+    const revised = revisedDocs(c).length;
+    if (revised) setState(3, `${revised}종 개정 반영`, true);
+    else if (pendingProposal) setState(3, `분석됨 · ${pendingProposal.selectedIds.length}종 선택`, false);
+    else setState(3, "요청 대기", false);
+    const items = getChecklistItems(c);
+    const doneCount = items.filter((it) => checkedItems[it.id]).length;
+    setState(4, `점검 ${doneCount} / ${items.length}`, doneCount === items.length);
+    renderDocBoard(c);
+  }
+
+  function openDocInStep2(id) {
+    if (BASIC4_IDS.includes(id)) {
+      el("easyFormBasic4Btn")?.click();
+      document.querySelector(`.b4-tab[data-doc="${id}"]`)?.click();
+    } else if (id === "form_company_staff") {
+      el("easyFormStaffBtn")?.click();
+    } else if (id === "form_project_plan") {
+      el("easyFormPlanBtn")?.click();
+    }
+    goToStep(2);
+  }
+
+  function bindFlowEvents() {
+    window.addEventListener("hashchange", () => showStep(stepFromHash() || 1, { scroll: true }));
+    el("docBoardList")?.addEventListener("click", (e) => {
+      const row = e.target.closest(".doc-board-row");
+      if (row) openDocInStep2(row.dataset.doc);
+    });
+    el("docBoardToggle")?.addEventListener("click", () => {
+      const board = el("docBoard");
+      const open = !board.classList.contains("open");
+      board.classList.toggle("open", open);
+      el("docBoardToggle").setAttribute("aria-expanded", String(open));
+    });
   }
 
   function bindEvents() {
@@ -1341,8 +1458,11 @@
   }
 
   async function init() {
+    document.querySelector(".app-shell")?.classList.add("flow-on");
+    showStep(stepFromHash() || 1);
     loadProfile();
     bindEvents();
+    bindFlowEvents();
     try {
       const resp = await fetch(`data/precomputed_cases.json?v=${ASSET_VER}`);
       const bundle = await resp.json();

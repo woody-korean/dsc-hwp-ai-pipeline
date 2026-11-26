@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>공공조달 문서 작성 및 변경 관리 | 충남대학교 B팀</title>
   <link rel="icon" href="data:," />
-  <link rel="stylesheet" href="easy.css?v=20261126b" />
+  <link rel="stylesheet" href="easy.css?v=20261126c" />
   <!-- Vendored copies of jszip@3.10.1, cfb@1.2.2, pako@2.1.0 so the demo also runs offline -->
   <script src="vendor/jszip.min.js"></script>
   <script src="vendor/cfb.min.js"></script>
@@ -33,13 +33,61 @@
       </p>
     </div>
 
-    <nav class="workflow-nav" aria-label="업무 처리 단계">
-      <a href="#step1Card" class="workflow-link"><span class="workflow-num">1단계</span><span>공고 요건 확인</span></a>
-      <a href="#step2Card" class="workflow-link"><span class="workflow-num">2단계</span><span>한글 양식 자동 입력</span></a>
-      <a href="#step3Card" class="workflow-link"><span class="workflow-num">3단계</span><span>변경 대상 분석 및 개정</span></a>
-      <a href="#step4Card" class="workflow-link"><span class="workflow-num">4단계</span><span>제출 전 점검 및 프롬프트</span></a>
-    </nav>
+    <div class="flow-layout">
+      <aside class="flow-rail" aria-label="업무 처리 단계">
+        <p class="rail-label">업무 처리 단계</p>
+        <ol class="step-list">
+          <li class="step-item" data-step="1">
+            <a href="#step1" class="step-link" data-step="1">
+              <span class="step-num" aria-hidden="true">1</span>
+              <span class="step-text">
+                <span class="step-name">공고 요건 확인</span>
+                <span id="stepState1" class="step-state">대기</span>
+                <span class="step-short" aria-hidden="true">공고 분석</span>
+              </span>
+            </a>
+          </li>
+          <li class="step-item" data-step="2">
+            <a href="#step2" class="step-link" data-step="2">
+              <span class="step-num" aria-hidden="true">2</span>
+              <span class="step-text">
+                <span class="step-name">한글 양식 자동 입력</span>
+                <span id="stepState2" class="step-state">대기</span>
+                <span class="step-short" aria-hidden="true">서식 작성</span>
+              </span>
+            </a>
+          </li>
+          <li class="step-item" data-step="3">
+            <a href="#step3" class="step-link" data-step="3">
+              <span class="step-num" aria-hidden="true">3</span>
+              <span class="step-text">
+                <span class="step-name">변경 대상 분석 및 개정</span>
+                <span id="stepState3" class="step-state">대기</span>
+                <span class="step-short" aria-hidden="true">변경 관리</span>
+              </span>
+            </a>
+          </li>
+          <li class="step-item" data-step="4">
+            <a href="#step4" class="step-link" data-step="4">
+              <span class="step-num" aria-hidden="true">4</span>
+              <span class="step-text">
+                <span class="step-name">제출 전 점검 및 프롬프트</span>
+                <span id="stepState4" class="step-state">대기</span>
+                <span class="step-short" aria-hidden="true">최종 점검</span>
+              </span>
+            </a>
+          </li>
+        </ol>
+        <div id="docBoard" class="doc-board">
+          <button id="docBoardToggle" type="button" class="doc-board-head" aria-expanded="false" aria-controls="docBoardList">
+            <span class="doc-board-title">서류 개정 현황</span>
+            <span id="docBoardCount" class="doc-board-count">6종 모두 Rev.1</span>
+          </button>
+          <ul id="docBoardList" class="doc-board-list"></ul>
+        </div>
+      </aside>
 
+      <div class="flow-main" id="flowMain">
     <details id="easyProfileDrawer" class="company-panel">
       <summary class="company-summary">
         <div class="company-summary-left">
@@ -71,10 +119,10 @@
     </details>
 
     <!-- 1단계: 공고 확인 및 제출 요건 정리 -->
-    <section id="step1Card" class="section-panel">
+    <section id="step1Card" class="section-panel step-panel" data-step="1" aria-labelledby="step1Title">
       <div class="section-head">
         <span class="section-kicker">1단계 · 공고 분석</span>
-        <h2 class="section-title">공고 확인 및 제출 요건 정리</h2>
+        <h2 id="step1Title" class="section-title">공고 확인 및 제출 요건 정리</h2>
         <p class="section-desc">대상 공고(.hwp, .hwpx)의 기본 제원, 제출서류, 원문 검토 유의사항을 확인합니다.</p>
       </div>
 
@@ -87,13 +135,17 @@
       </div>
 
       <div id="easySummaryCards"></div>
+      <div class="step-footer">
+        <span></span>
+        <a href="#step2" class="btn btn-primary step-next" data-goto="2">다음 단계 · 한글 양식 자동 입력</a>
+      </div>
     </section>
 
     <!-- 2단계: 한글 양식 자동 입력 및 거래 서식 생성 -->
-    <section id="step2Card" class="section-panel">
+    <section id="step2Card" class="section-panel step-panel" data-step="2" aria-labelledby="step2Title">
       <div class="section-head">
         <span class="section-kicker">2단계 · 서식 작성</span>
-        <h2 class="section-title">한글 양식 자동 입력 및 거래 서식 생성</h2>
+        <h2 id="step2Title" class="section-title">한글 양식 자동 입력 및 거래 서식 생성</h2>
         <p class="section-desc">기관 지정 양식(.hwpx)의 빈칸과 안내 문구 위치를 인식해 기업 정보와 공고 내용을 자동 기입합니다.</p>
       </div>
 
@@ -136,13 +188,17 @@
         </div>
         <div id="easyA4Sheet" class="a4-preview"></div>
       </div>
+      <div class="step-footer">
+        <a href="#step1" class="btn step-prev" data-goto="1">이전 · 공고 요건 확인</a>
+        <a href="#step3" class="btn btn-primary step-next" data-goto="3">다음 단계 · 변경 대상 분석 및 개정</a>
+      </div>
     </section>
 
     <!-- 3단계: 변경 요청 분석 및 선별 개정 -->
-    <section id="step3Card" class="section-panel">
+    <section id="step3Card" class="section-panel step-panel" data-step="3" aria-labelledby="step3Title">
       <div class="section-head">
         <span class="section-kicker">3단계 · 변경 관리</span>
-        <h2 class="section-title">변경 요청 분석 및 선별 개정</h2>
+        <h2 id="step3Title" class="section-title">변경 요청 분석 및 선별 개정</h2>
         <p class="section-desc">수신한 변경 요청에서 변동 항목을 추출해 6종 서류 중 개정이 필요한 서류만 선별 반영하고 회신 문안을 생성합니다.</p>
       </div>
 
@@ -184,13 +240,17 @@
           <div id="easyReplyBox" class="text-output-box">변경 대상 분석을 실행하면 개정 서류와 유지 서류가 구분된 회신 문안이 생성됩니다.</div>
         </div>
       </div>
+      <div class="step-footer">
+        <a href="#step2" class="btn step-prev" data-goto="2">이전 · 한글 양식 자동 입력</a>
+        <a href="#step4" class="btn btn-primary step-next" data-goto="4">다음 단계 · 제출 전 점검</a>
+      </div>
     </section>
 
     <!-- 4단계: 제출 전 담당자 점검 및 표준 프롬프트 -->
-    <section id="step4Card" class="section-panel">
+    <section id="step4Card" class="section-panel step-panel" data-step="4" aria-labelledby="step4Title">
       <div class="section-head">
         <span class="section-kicker">4단계 · 최종 점검</span>
-        <h2 class="section-title">제출 전 담당자 점검 및 표준 프롬프트</h2>
+        <h2 id="step4Title" class="section-title">제출 전 담당자 점검 및 표준 프롬프트</h2>
         <p class="section-desc">금액, 개인정보, 법적 서약 체크란 및 날인 여부를 최종 확인하고 사내 AI 활용용 표준 프롬프트를 복사합니다.</p>
       </div>
 
@@ -222,10 +282,16 @@
           <div id="easyPromptBox" class="text-output-box"></div>
         </div>
       </div>
+      <div class="step-footer">
+        <a href="#step3" class="btn step-prev" data-goto="3">이전 · 변경 대상 분석 및 개정</a>
+        <span class="step-done-note">모든 단계를 확인했습니다. 점검 목록을 완료한 뒤 제출하십시오.</span>
+      </div>
     </section>
+      </div>
+    </div>
   </main>
 
   <script src="hwp_browser_parser.js?v=20261126b"></script>
-  <script src="easy.js?v=20261126b"></script>
+  <script src="easy.js?v=20261126c"></script>
 </body>
 </html>
