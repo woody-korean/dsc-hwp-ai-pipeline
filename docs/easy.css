@@ -2408,6 +2408,26 @@ button.rev-tile {
   vertical-align: bottom;
 }
 
+/* Ordered vs delivered quantity gap on the inspection sheet (the slide 2 case) */
+.data-table tr.qty-gap td {
+  background: var(--warn-bg);
+}
+
+.data-table tr.qty-gap td:nth-child(4),
+.data-table tr.qty-gap td:last-child {
+  color: var(--warn-text);
+  font-weight: 700;
+}
+
+.qty-gap-note {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: 4px;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
 /* Guided flow below 1200px: rail becomes a sticky top stepper */
 @media (max-width: 1199px) {
   .flow-layout {

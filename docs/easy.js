@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126i";
+  const ASSET_VER = "20261126j";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -579,6 +579,21 @@
     renderDocPicker();
   }
 
+  // Ordered quantity vs what was actually delivered: report the gap, never "fix" it.
+  function qtyGaps(di) {
+    return (di?.items || [])
+      .map((it, i) => ({ i, name: it.name, gap: Number(it.ordered_qty || 0) - Number(it.delivered_qty || 0) }))
+      .filter((g) => g.gap !== 0);
+  }
+
+  function qtyGapNote(di) {
+    const gaps = qtyGaps(di);
+    if (!gaps.length) return "";
+    const g = gaps[0];
+    const what = g.gap > 0 ? `남은 ${num(g.gap)}개` : `초과 ${num(-g.gap)}개`;
+    return `<p class="a4-note qty-gap-note"><strong>수량 차이:</strong> ${g.i + 1}번 품목 '${esc(g.name)}'의 발주수량과 실제 납품수량이 다릅니다. 납품 · 합격 수량은 실제 입고 · 검수 기록으로만 바꾸고, ${what}의 사유(부분 납품 여부)를 거래처와 확인하십시오.</p>`;
+  }
+
   function renderEasyBasic4Sheet() {
     if (!activeCase) return;
     const chain = activeCase.doc_chain;
@@ -663,10 +678,17 @@
           <table class="data-table">
             <thead><tr><th class="center">번호</th><th>품명</th><th class="num">발주수량</th><th class="num">납품수량</th><th class="num">합격수량</th><th class="center">판정</th></tr></thead>
             <tbody>
-              ${di.items.map((it, idx) => `<tr><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td class="num">${num(it.ordered_qty)}</td><td class="num">${num(it.delivered_qty)}</td><td class="num">${num(it.passed_qty)}</td><td class="center"><strong>${esc(it.result)}</strong></td></tr>`).join("")}
+              ${di.items
+                .map((it, idx) => {
+                  const gap = Number(it.ordered_qty || 0) - Number(it.delivered_qty || 0);
+                  const verdict = gap > 0 ? `미입고 ${num(gap)} · 확인 필요` : gap < 0 ? `초과 ${num(-gap)} · 확인 필요` : it.result;
+                  return `<tr class="${gap ? "qty-gap" : ""}"><td class="center">${idx + 1}</td><td>${esc(it.name)}</td><td class="num">${num(it.ordered_qty)}</td><td class="num">${num(it.delivered_qty)}</td><td class="num">${num(it.passed_qty)}</td><td class="center"><strong>${esc(verdict)}</strong></td></tr>`;
+                })
+                .join("")}
             </tbody>
           </table>
-        </div>`;
+        </div>
+        ${qtyGapNote(di)}`;
     } else {
       const ap = chain.expense_approval;
       container.innerHTML = `
@@ -821,7 +843,11 @@
     const reasons = {
       quotation: qtyChanged ? `수량 변경(${oldQty}→${prop.new_qty})에 따른 금액 재산정 필요` : "수량·단가 변동 없음",
       purchase_order: impacted.purchase_order ? "작업 수량 · 납기 · 납품장소 반영 필요" : "작업 수량 · 납기 · 장소 변동 없음",
-      delivery_inspection: impacted.delivery_inspection ? "검수 기준 수량 · 검수일 · 장소 현행화 필요" : "검수 기준 및 납품 장소 변동 없음",
+      delivery_inspection: impacted.delivery_inspection
+        ? qtyChanged
+          ? "발주수량 · 검수일 · 장소 현행화 필요 (납품 · 합격 수량은 실제 기록 유지)"
+          : "검수일 · 장소 현행화 필요"
+        : "검수 기준 및 납품 장소 변동 없음",
       expense_approval: qtyChanged ? "지출 총액 변동으로 내부 품의 재상신 필요" : "총액 변동 없음 (재결재 불필요)",
       form_company_staff: pmChanged ? `총괄책임자(${oldPm} → ${prop.new_pm}) 인력표 수정 필요` : "투입 인력 변동 없음",
       form_project_plan: impacted.form_project_plan ? "수행계획서 내 책임자·일정·예산 요약 수정 필요" : "사업 수행 내용 변동 없음",
@@ -866,9 +892,9 @@
     }
     if (sel.has("delivery_inspection")) {
       if (di.items[0]) {
+        // Only the ordered quantity is a contract term. Delivered and accepted quantities are
+        // what was physically received and inspected; a change request must never rewrite them.
         di.items[0].ordered_qty = prop.new_qty;
-        di.items[0].delivered_qty = prop.new_qty;
-        di.items[0].passed_qty = prop.new_qty;
       }
       di.delivery_date = shiftDate(prop.new_due_date, -2);
       di.delivery_location = prop.new_location;
@@ -1019,6 +1045,11 @@
     const diffRows = [
       ["총괄책임자(PM)", activeCase.pm_name || "이준호", after.pm_name || "이준호"],
       ["1번 품목 수량", `${num(qOld.items[0].qty)}${qOld.items[0].unit}`, `${num(qNew.items[0].qty)}${qNew.items[0].unit}`],
+      [
+        "1번 품목 납품 · 합격 (실제 기록)",
+        `${num(activeCase.doc_chain.delivery_inspection.items[0]?.delivered_qty)} / ${num(activeCase.doc_chain.delivery_inspection.items[0]?.passed_qty)}`,
+        `${num(after.doc_chain.delivery_inspection.items[0]?.delivered_qty)} / ${num(after.doc_chain.delivery_inspection.items[0]?.passed_qty)}`,
+      ],
       ["납품 기한", activeCase.doc_chain.purchase_order.due_date || "-", after.doc_chain.purchase_order.due_date || "-"],
       ["납품 장소", activeCase.delivery_location || "-", after.delivery_location || "-"],
       ["총 합계(VAT 포함)", won(qOld.grand_total), won(qNew.grand_total)],
@@ -1071,7 +1102,13 @@
       { id: "c3", title: "3. 계좌 · 사업자번호 · 원가 등 민감정보 보호 점검", detail: `사업자번호(${companyProfile.biz_no}), 계좌(${companyProfile.bank}) 확인 및 외부 입력 시 마스킹 준수` },
       { id: "c4", title: "4. 양식 내 법적 서약 체크란([ ] 예/아니오) 담당자 직접 기입", detail: "이해충돌 · 수의계약 제한 · 보훈/여성기업 등 법적 확인 항목은 담당자가 사실 확인 후 직접 표기" },
       { id: "c5", title: "5. 대표자 직인 날인 및 제출 파일(.hwpx) 열람 최종 확인", detail: `대표자 '${companyProfile.ceo}' 날인 및 생성된 한글 파일 서식 검토` },
-    ];
+    ].concat(
+      qtyGaps(c.doc_chain.delivery_inspection).slice(0, 1).map((g) => ({
+        id: "c6",
+        title: "6. 발주 대비 납품 수량 차이 사유 확인",
+        detail: `${g.i + 1}번 품목 발주 ${num(c.doc_chain.delivery_inspection.items[g.i].ordered_qty)} · 납품 ${num(c.doc_chain.delivery_inspection.items[g.i].delivered_qty)} · 합격 ${num(c.doc_chain.delivery_inspection.items[g.i].passed_qty)} — 부분 납품인지, 입고 기록 누락인지 거래처와 확인`,
+      }))
+    );
   }
 
   function buildEasyPromptText(c, key) {

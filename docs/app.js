@@ -1,7 +1,7 @@
 (function () {
   const BAZE_ENDPOINT = "https://factchat-cloud.mindlogic.ai/v1/gateway/chat/completions";
   const BAZE_MODEL = "gpt-6.1-terra";
-  const ASSET_VER = "20261125a";
+  const ASSET_VER = "20261126a";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -360,6 +360,11 @@
     activeCase.delivery_location =
       activeCase.doc_chain?.delivery_inspection?.delivery_location || "발주기관 지정 납품장소";
     activeCase.pm_name = parseStaffRows(companyProfile.staff_text)[0]?.name || "이준호";
+    activeCase.doc_fields = {
+      quotation: { pm_name: activeCase.pm_name, delivery_location: activeCase.delivery_location },
+      form_company_staff: { pm_name: activeCase.pm_name },
+      form_project_plan: { pm_name: activeCase.pm_name, delivery_location: activeCase.delivery_location },
+    };
     recalcCaseTotals(activeCase);
     baselineCase = deepClone(activeCase);
     if (el("formWorkbenchPreview")) {
@@ -993,7 +998,22 @@
     return map;
   }
 
-  function buildUniversalFormContext(c) {
+  // Which registered document the open preset template is (null for KIMM / uploaded forms).
+  let activeTemplateDoc = null;
+  const TEMPLATE_DOC = {
+    "standard_quote_submit_template.hwpx": "quotation",
+    "agency_company_staff_template.hwpx": "form_company_staff",
+    "agency_project_plan_template.hwpx": "form_project_plan",
+  };
+
+  function docView(c, docId) {
+    const own = docId && c.doc_fields ? c.doc_fields[docId] : null;
+    if (!own) return c;
+    return { ...c, pm_name: own.pm_name ?? c.pm_name, delivery_location: own.delivery_location ?? c.delivery_location };
+  }
+
+  function buildUniversalFormContext(caseIn) {
+    const c = docView(caseIn, activeTemplateDoc);
     const placeholders = buildTemplateMaps(c);
     const q = c.doc_chain.quotation;
     const po = c.doc_chain.purchase_order;
@@ -1560,10 +1580,14 @@
           di.items[idx].ordered_qty = Math.max(1, parseInt(proposal.new_qty, 10) || di.items[idx].ordered_qty);
         }
         const ord = di.items[idx].ordered_qty;
-        const deliv = Math.max(0, ord - shortVal);
-        di.items[idx].delivered_qty = deliv;
-        di.items[idx].passed_qty = deliv;
-        di.items[idx].result = deliv === ord ? "적합" : "수량불일치(보류)";
+        // Ordered quantity is a contract term; delivered/accepted are what was actually received
+        // and inspected. Only an explicitly reported shortage (an observation) may change them.
+        if (shortVal > 0) {
+          const deliv = Math.max(0, ord - shortVal);
+          di.items[idx].delivered_qty = deliv;
+          di.items[idx].passed_qty = Math.min(di.items[idx].passed_qty ?? deliv, deliv);
+        }
+        di.items[idx].result = di.items[idx].delivered_qty === ord ? "적합" : "수량불일치(보류)";
       }
       if (dueChanged) {
         di.delivery_date = shiftIsoDate(proposal.new_due_date, -2);
@@ -1587,14 +1611,24 @@
       ap.doc_no = addRevisionSuffix(ap.doc_no, revs.expense_approval);
     }
 
+    // A document that is re-issued carries the latest agreed terms; the rest keep theirs.
+    const latestPm = pmChanged ? proposal.new_pm : oldPm;
+    const latestLoc = locChanged ? proposal.new_location : oldLoc;
+    next.doc_fields = next.doc_fields || {};
+    if (selected.has("quotation")) {
+      next.doc_fields.quotation = { pm_name: latestPm, delivery_location: latestLoc };
+    }
+
     if (selected.has("form_company_staff")) {
       if (pmChanged) next.pm_name = proposal.new_pm;
+      next.doc_fields.form_company_staff = { pm_name: latestPm };
       revs.form_company_staff = (revs.form_company_staff || 1) + 1;
     }
 
     if (selected.has("form_project_plan")) {
       if (pmChanged) next.pm_name = proposal.new_pm;
       if (locChanged) next.delivery_location = proposal.new_location;
+      next.doc_fields.form_project_plan = { pm_name: latestPm, delivery_location: latestLoc };
       revs.form_project_plan = (revs.form_project_plan || 1) + 1;
     }
 
@@ -2039,6 +2073,7 @@
       const resp = await fetch(`templates/${templateFile}?v=${ASSET_VER}`);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const buf = await resp.arrayBuffer();
+      activeTemplateDoc = TEMPLATE_DOC[templateFile] || null;
       await openFormWorkbenchFromBuffer(buf, `${activeCase.id}_${downloadSuffix}.hwpx`);
     } catch (err) {
       status.style.color = "var(--fail)";
@@ -2179,6 +2214,7 @@
       const f = e.target.files?.[0];
       if (!f) return;
       const buf = await f.arrayBuffer();
+      activeTemplateDoc = null;
       await openFormWorkbenchFromBuffer(buf, `filled_${f.name}`);
       cti.value = "";
     });
@@ -2216,8 +2252,12 @@
         const due = activeCase.doc_chain.purchase_order.due_date || "2026-12-20";
         const sc = btn.dataset.scenario;
         if (sc === "qty_due") {
+          // Scale the item's real quantity (2개 -> 3개, 100개 -> 120개) instead of assuming 100 -> 120.
+          const oldQty = Math.max(1, parseInt(first.qty, 10) || 1);
+          const newQty = oldQty >= 5 ? Math.round(oldQty * 1.2) : oldQty + 1;
+          const unit = ["개", "EA", "SET"].includes(first.unit) ? first.unit : "개";
           el("changeRequestInput").value =
-            `담당자님, ${activeCase.doc_chain.quotation.project_name} 건에서 1번 품목(${first.name}) 납품 수량을 100개에서 120개로 변경하고, 납기는 기존(${due}) 대비 7일 연장해 주세요. 견적·발주·납품·품의·수행계획서 반영 후 회신 부탁드립니다.`;
+            `담당자님, ${activeCase.doc_chain.quotation.project_name} 건에서 1번 품목(${first.name}) 납품 수량을 ${oldQty}${unit}에서 ${newQty}${unit}로 변경하고, 납기는 기존(${due}) 대비 7일 연장해 주세요. 견적·발주·납품·품의·수행계획서 반영 후 회신 부탁드립니다.`;
         } else if (sc === "due_location") {
           el("changeRequestInput").value =
             `발주기관 연구실 요청입니다. 시험실 공사 일정으로 납기를 기존(${due}) 대비 10일 연장해 주시고, 납품장소는 기존 위치에서 '제2연구동 1층 계측기 반입구'로 변경 부탁드립니다. 계약 수량·단가(총액) 및 참여인력은 변동 없습니다.`;
