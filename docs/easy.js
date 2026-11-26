@@ -1,5 +1,5 @@
 (function () {
-  const ASSET_VER = "20261126h";
+  const ASSET_VER = "20261126i";
   const PROFILE_STORAGE_KEY = "dsc_team_b_company_profile_v2";
   const LEGACY_PROFILE_KEY = "dsc_team_b_company_profile_v1";
 
@@ -540,7 +540,7 @@
     updateFormTabHighlight();
 
     try {
-      const plan = await window.HwpBrowserParser.analyzeHwpxForm(buf, buildFormContext(activeCase));
+      const plan = await window.HwpBrowserParser.analyzeHwpxForm(buf, buildFormContext(formView(activeCase, formKey)));
       activeFormBuffer = buf;
       activeFormFilename = outFilename;
       activeFormPlan = plan;
@@ -567,7 +567,7 @@
 
   async function refreshActiveEasyForm() {
     if (!activeFormBuffer || !activeCase || activeFormKey === "basic4") return;
-    activeFormPlan = await window.HwpBrowserParser.analyzeHwpxForm(activeFormBuffer, buildFormContext(activeCase));
+    activeFormPlan = await window.HwpBrowserParser.analyzeHwpxForm(activeFormBuffer, buildFormContext(formView(activeCase, activeFormKey)));
     renderEasySlotTable();
   }
 
@@ -628,8 +628,8 @@
         <div class="table-wrap">
           <table class="kv-table">
             <tbody>
-              <tr><th>납품 장소</th><td>${esc(activeCase.delivery_location || chain.delivery_inspection?.delivery_location || "-")}</td></tr>
-              <tr><th>총괄책임자(PM)</th><td><strong>${esc(activeCase.pm_name || "이준호")}</strong></td></tr>
+              <tr><th>납품 장소</th><td>${esc(po.delivery_location || activeCase.delivery_location || chain.delivery_inspection?.delivery_location || "-")}</td></tr>
+              <tr><th>총괄책임자(PM)</th><td><strong>${esc(po.pm_name || activeCase.pm_name || "이준호")}</strong></td></tr>
             </tbody>
           </table>
         </div>
@@ -855,9 +855,12 @@
       revs.quotation += 1;
       q.doc_no = `${stripRev(q.doc_no)}-Rev${revs.quotation}`;
     }
+    if (!next.form_fields) snapshotDocFields(next);
     if (sel.has("purchase_order")) {
       if (po.items[0]) po.items[0].qty = prop.new_qty;
       po.due_date = prop.new_due_date;
+      po.pm_name = prop.new_pm;
+      po.delivery_location = prop.new_location;
       revs.purchase_order += 1;
       po.doc_no = `${stripRev(po.doc_no)}-Rev${revs.purchase_order}`;
     }
@@ -882,11 +885,14 @@
     }
     if (sel.has("form_company_staff")) {
       next.pm_name = prop.new_pm;
+      next.form_fields.form_company_staff.pm_name = prop.new_pm;
       revs.form_company_staff += 1;
     }
     if (sel.has("form_project_plan")) {
       next.pm_name = prop.new_pm;
       next.delivery_location = prop.new_location;
+      next.form_fields.form_project_plan.pm_name = prop.new_pm;
+      next.form_fields.form_project_plan.delivery_location = prop.new_location;
       revs.form_project_plan += 1;
     }
     next.last_change_summary = prop.reason_summary;
@@ -1167,11 +1173,38 @@
     renderFlowStatus();
   }
 
+  /* Each document keeps its own copy of the PM and delivery location, so a document that
+     stays at Rev.1 keeps its Rev.1 content when another document is revised. */
+  function snapshotDocFields(c) {
+    const po = c.doc_chain?.purchase_order;
+    if (po) {
+      po.pm_name = c.pm_name;
+      po.delivery_location = c.delivery_location;
+    }
+    c.form_fields = {
+      form_company_staff: { pm_name: c.pm_name },
+      form_project_plan: { pm_name: c.pm_name, delivery_location: c.delivery_location },
+    };
+  }
+
+  // The case as a given form should see it: that form's own PM and delivery location.
+  function formView(c, formKey) {
+    const ff = c.form_fields || {};
+    const own = formKey === "staff" ? ff.form_company_staff : formKey === "plan" ? ff.form_project_plan : null;
+    if (!own) return c;
+    return {
+      ...c,
+      pm_name: own.pm_name ?? c.pm_name,
+      delivery_location: own.delivery_location ?? c.delivery_location,
+    };
+  }
+
   function selectEasyCase(c) {
     activeCase = deepClone(c);
     activeCase.doc_revisions = defaultRevisions();
     activeCase.pm_name = parseStaffRows(companyProfile.staff_text)[0]?.name || "이준호";
     activeCase.delivery_location = activeCase.doc_chain?.delivery_inspection?.delivery_location || "발주기관 지정 장소";
+    snapshotDocFields(activeCase);
     recalcTotals(activeCase);
     baselineCase = deepClone(activeCase);
     pendingProposal = null;
