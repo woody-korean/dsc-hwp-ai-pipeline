@@ -502,7 +502,7 @@ def build_slide_1(prs: Presentation) -> None:
             ],
             [
                 ("구현 결과물", True, INK, PP_ALIGN.LEFT),
-                ("무라이선스 HWP/HWPX 파서 + 임의 기관양식(.hwpx) 빈칸 자동분석·작성 + 영향 서류 선별 개정·회신", False, BODY, PP_ALIGN.LEFT),
+                ("무라이선스 HWP/HWPX 파서 + 임의 기관양식(기계연 확인서 등) 자동 기입 + 선별 개정 · 최종 점검 콘솔", False, BODY, PP_ALIGN.LEFT),
             ],
             [
                 ("발표 팀 / 구성", True, INK, PP_ALIGN.LEFT),
@@ -553,11 +553,12 @@ def build_slide_1(prs: Presentation) -> None:
         2.25,
         [
             [("실시간 시연 탑재 기능", 10.0, True, INK)],
-            [("1. ", 9.5, True, NAVY), ("방위사업청·KRISS 실물 .hwp/.hwpx 5종 즉시 파싱", 9.5, False, BODY)],
-            [("2. ", 9.5, True, NAVY), ("기업자료 1회 등록 → 임의 기관양식(.hwpx) 자동분석·작성", 9.5, False, BODY)],
-            [("3. ", 9.5, True, NAVY), ("사후 변경요청 영향서류 선별 개정(Diff) · 회신 초안 생성", 9.5, False, BODY)],
+            [("1. ", 9.2, True, NAVY), ("방위사업청·KRISS 실물 .hwp/.hwpx 5종 즉시 파싱", 9.2, False, BODY)],
+            [("2. ", 9.2, True, NAVY), ("기계연(KIMM) 수의계약 확인서 등 임의 .hwpx 9/9 자동 기입", 9.2, False, BODY)],
+            [("3. ", 9.2, True, NAVY), ("사후 변경요청 6종 영향 판별(Rev.2 선별 개정) · 회신 생성", 9.2, False, BODY)],
+            [("4. ", 9.2, True, NAVY), ("실무자용 간편 콘솔(/easy.html) · 최종 점검표 · 표준 프롬프트", 9.2, False, BODY)],
         ],
-        space_after_pt=6.0,
+        space_after_pt=5.0,
     )
 
     add_rect(slide, 0.55, 7.04, 12.23, 0.012, fill=BORDER_GRAY, line_color=None)
@@ -1062,9 +1063,9 @@ def build_slide_5(prs: Presentation) -> None:
         5.12,
         3.92,
         1.70,
-        "범용 .hwpx",
-        "빈칸 기관양식 구조 분석 · 자동 작성",
-        "{{}} 태그 없는 업체 일반현황·참여인력표·사업수행계획서까지\n표·빈칸을 자동 인식해 기업자료 DB에서 채운 .hwpx + ERP CSV 출력",
+        "KIMM 9 / 9",
+        "한국기계연구원 실물 확인서 자동 기입",
+        "파란 안내문구('~ 기재') 포함 9/9칸 검정 글씨 자동 기입 및\n이해충돌 [ ] 체크란 13건 · 서명란 Human-in-the-Loop 보호",
         accent=INK,
         fill=SURFACE_SUB,
     )
@@ -1086,7 +1087,9 @@ def build_slide_5(prs: Presentation) -> None:
         "[2:50 - 3:25] 실물 검증 결과\n"
         "가짜 테스트 파일이 아니라 실제 방위사업청 4종과 대전 유성구 한국표준과학연구원(KRISS)의 실제 GPU 워크스테이션 구매규격서(.hwp)까지 총 5종을 수집·검증했습니다.\n"
         "특히 새로 추가한 5번 KRISS .hwp 규격서에서는 실제 공고문에 'DDR5-5600 MHz (= PC4-44800)'처럼 DDR5와 PC4가 잘못 병기된 표기 오류와 납품기한 경과 위험까지 "
-        "BAZE AI가 자동으로 잡아내어 실무 경고로 띄워주며 4개 품목 4,070만 원 견적·발주·검수·품의서를 생성해 전 건 5/5 PASS를 확인했습니다.",
+        "BAZE AI가 자동으로 잡아내어 실무 경고로 띄워주며 4개 품목 4,070만 원 견적·발주·검수·품의서를 생성해 전 건 5/5 PASS를 확인했습니다.\n"
+        "또한 대전 한국기계연구원(KIMM)이 실제 사용하는 '수의계약 체결 제한 여부 확인서(.hwpx)' 양식을 사전 코딩 없이 투입해 9개 기입 항목을 100% 자동 작성하고, "
+        "법적 서약 체크란 13건과 서명란은 담당자가 직접 확인하도록 보호하는 Human-in-the-Loop 동작까지 교차 실증했습니다.",
     )
 
 
@@ -1096,26 +1099,26 @@ def build_slide_6(prs: Presentation) -> None:
         slide,
         6,
         "현장 라이브 시연  |  배점: 결과물 완성도 및 활용성 30점",
-        "GitHub Pages 실시간 시연: 임의 기관양식 분석 → 영향 서류 선별 개정",
-        "기업자료 1회 등록 기반 업체현황·인력표·수행계획서(.hwpx) 자동 작성부터 PM·납품처·수량 변경 시 관련 서류만 Rev.2 선별 수정",
+        "GitHub Pages 실시간 시연: 기계연 실물 양식 작성 → PM 교체 선별 개정",
+        "비전공 실무자용 간편 콘솔(/easy.html)과 전문가 기술·보안 검증 화면을 양방향 연동해 현장 즉시 활용",
     )
 
     # Left: 3-Step Live Demo Script (clean & spacious)
-    add_section_label(slide, 0.55, 1.36, 4.55, "1. 현장 라이브 시연 3단계 (브라우저 전환)")
+    add_section_label(slide, 0.55, 1.36, 4.55, "1. 현장 라이브 시연 3단계 (실무 콘솔 기준)")
     demo_steps = [
         (
-            "1단계  |  임의 기관 .hwpx 빈칸 분석 & 기업DB 연동",
-            "KRISS .hwp 파싱 후 [② 업체 일반현황·인력표] / [③ 사업수행계획서] 클릭 → 빈 칸 구조 스캔·편집 후 .hwpx + ERP CSV 저장",
+            "1단계  |  KRISS 공고 확인 & KIMM 확인서 9/9 기입",
+            "KRISS .hwp 요건·유의사항 확인 후 [수의계약 확인서(기계연)] 탭에서 9/9칸 자동 기입(.hwpx) + 법적 체크란 13건 보호",
             NAVY,
         ),
         (
-            "2단계  |  영향 서류 판별 매트릭스 & 선별 Rev.2",
-            "Step 04 [PM 교체] 시 인력·계획서 2종만 개정(핵심 4종 Rev.1 유지), [납기·장소] 시 3종만 개정 + Diff·회신 메일 생성",
+            "2단계  |  PM 교체 6종 영향 판별 & 선별 Rev.2 개정",
+            "3단계에서 [PM 이준호→박서연 교체] 분석 시 인력표·계획서 2종만 개정(핵심 4종 Rev.1 유지) + 비교표·회신 문안 생성",
             EMERALD,
         ),
         (
-            "3단계  |  3-Way 불일치 탐지 & 직접 .hwp 업로드",
-            "'수량·금액 불일치 탐지 시연' 빨간 [불일치] 경고 확인 및 심사위원 보유 임의 .hwp/.hwpx 브라우저 로컬 직접 변환",
+            "3단계  |  제출 전 5대 점검표 & 기술·보안 화면 전환",
+            "4단계 최종 점검표·사내 AI용 표준 프롬프트 복사 확인 후 [기술·보안 상세 화면]에서 3-Way 불일치·ROI 시뮬레이터 확인",
             CRIMSON,
         ),
     ]
@@ -1128,7 +1131,7 @@ def build_slide_6(prs: Presentation) -> None:
             cy + 0.10,
             4.28,
             1.10,
-            [[(dt, 10.5, True, col)], [(dd, 9.5, False, BODY)]],
+            [[(dt, 10.3, True, col)], [(dd, 9.3, False, BODY)]],
             margin_lr=0.02,
             margin_tb=0.01,
             space_after_pt=5.0,
@@ -1143,8 +1146,8 @@ def build_slide_6(prs: Presentation) -> None:
         4.28,
         0.76,
         [
-            [("현장 즉시 체험 (GitHub Pages 상시 배포)", 9.8, True, NAVY)],
-            [("woody-korean.github.io/dsc-hwp-ai-pipeline/\n브라우저 로컬 JS 파서 구동으로 외부 서버 파일 전송 0 Byte", 8.8, False, BODY)],
+            [("실무 콘솔 & 기술 검증 화면 (GitHub Pages 상시 배포)", 9.5, True, NAVY)],
+            [("실무 콘솔: .../dsc-hwp-ai-pipeline/easy.html\n기술 검증: .../dsc-hwp-ai-pipeline/ (로컬 JS 파싱)", 8.5, False, BODY)],
         ],
         margin_lr=0.02,
         margin_tb=0.01,
@@ -1152,7 +1155,7 @@ def build_slide_6(prs: Presentation) -> None:
     )
 
     # Right: Large, High-Contrast Cropped Demo UI Preview
-    add_section_label(slide, 5.30, 1.36, 7.48, "2. 실제 배포된 웹 앱 화면 (3-Way 검증 · 단일 원천 수정 · A4 검수조서)")
+    add_section_label(slide, 5.30, 1.36, 7.48, "2. 실제 배포된 실무 콘솔 화면 (easy.html — PM 교체 선별 개정 · 회신 문안)")
     add_rect(slide, 5.30, 1.70, 7.48, 5.14, fill=WHITE, line_color=BORDER_DARK, line_pt=1.0)
     if DEMO_PREVIEW_PATH.exists():
         add_picture_fit(slide, DEMO_PREVIEW_PATH, 5.38, 1.76, 7.32, 4.72)
@@ -1162,7 +1165,7 @@ def build_slide_6(prs: Presentation) -> None:
         6.52,
         7.32,
         0.28,
-        [("실제 GitHub Pages 캡처: ① 3-Way 교차검증 표(적합)  ② 단일 원천 수량·단가 수정  ③ 거래명세·납품검수조서 실시간 동기화", 8.8, True, MUTED, PP_ALIGN.CENTER)],
+        [("실제 배포 캡처: ① 6종 중 2종(인력표·계획서)만 수정 대상 판별  ② 항목별 변경 전·후 비교표  ③ 거래처 공식 회신 문안", 8.8, True, MUTED, PP_ALIGN.CENTER)],
         margin_lr=0.0,
         margin_tb=0.0,
         valign=MSO_ANCHOR.MIDDLE,
@@ -1171,11 +1174,11 @@ def build_slide_6(prs: Presentation) -> None:
     set_speaker_notes(
         slide,
         "[3:25 - 4:50] 라이브 시연 (화면 전환 1분 20초)\n"
-        "지금부터 실제 배포된 GitHub Pages 화면으로 3단계 시연을 보여드리겠습니다.\n"
-        "(브라우저 전환) 1단계, 한국표준과학연구원(KRISS) 실물 .hwp 규격서를 선택하면 원문 파싱과 DDR5/PC4 오기 경고가 즉시 뜹니다. "
-        "특히 기본 4종 서식에 한정하지 않고, [업체 일반현황·인력현황표]나 [사업수행계획서] 같은 기관 빈 양식을 누르면 브라우저 구조 분석기가 빈 칸을 자동 스캔해 기업자료 DB와 공고 내용으로 채운 뒤 완성본 .hwpx를 내려받을 수 있습니다.\n"
-        "2단계, 사후 변경관리 Step 04에서 '총괄책임자(PM) 교체' 시나리오를 누르면 4종 서류를 무조건 고치지 않고 영향 받는 '인력표·계획서' 2종만 자동 체크해 Rev.2로 선별 개정하고 견적·발주·검수·품의 4종은 Rev.1을 유지한 채 회신 메일 초안까지 생성합니다.\n"
-        "3단계, 불일치 오류 탐지 시연과 심사위원 보유 .hwpx 양식 직접 업로드 분석으로 범용 확장성을 확인하실 수 있습니다.",
+        "지금부터 비전공 실무자도 바로 쓸 수 있게 설계한 실무 콘솔(easy.html)로 3단계 시연을 보여드리겠습니다.\n"
+        "(브라우저 전환) 1단계, 한국표준과학연구원(KRISS) 실물 .hwp 규격서를 선택하면 원문 제원과 DDR5/PC4 오기 유의사항이 표로 정리됩니다. "
+        "2단계에서 한국기계연구원(KIMM) 실제 수의계약 확인서(.hwpx)를 열면 파란 안내문구까지 인식해 9개 항목을 자동 기입하고, 이해충돌 체크란 13건과 서명란은 법적 안전을 위해 수동 확인으로 보호합니다.\n"
+        "3단계에서 '총괄책임자(PM) 이준호→박서연 교체' 시나리오를 분석하면 6종 중 인력표·계획서 2종만 수정 대상으로 판별해 Rev.2로 선별 개정하고, 견적·발주·검수·품의 4종은 Rev.1을 유지한 채 회신 문안까지 생성합니다.\n"
+        "마지막으로 4단계 제출 전 5대 점검표와 사내 AI용 표준 프롬프트를 확인하고, 우측 상단 버튼으로 기술·보안 검증 화면(3-Way 불일치 탐지·ROI 시뮬레이터)까지 전환할 수 있습니다.",
     )
 
 
@@ -1549,8 +1552,8 @@ def build_slide_9(prs: Presentation) -> None:
         headers=None,
         rows=[
             [
-                ("무라이선스 · 5종 실물 검증", True, INK, PP_ALIGN.LEFT),
-                ("방위사업청 4종(303문단·8표 .hwpx 포함) + 대전 출연연(KRISS .hwp 5.0) 실물 테스트 및 지정 .hwpx 양식 채우기 완료", False, BODY, PP_ALIGN.LEFT),
+                ("무라이선스 · 5종 + KIMM 실증", True, INK, PP_ALIGN.LEFT),
+                ("방위사업청 4종 + 대전 KRISS .hwp 5.0 + 한국기계연구원(KIMM) 수의계약 확인서(.hwpx) 9/9 자동 기입 완료", False, BODY, PP_ALIGN.LEFT),
             ],
             [
                 ("사내 DB · RAG와의\n차별성 및 시너지", True, INK, PP_ALIGN.LEFT),
@@ -1558,7 +1561,7 @@ def build_slide_9(prs: Presentation) -> None:
             ],
             [
                 ("지역 현장 확산 전략", True, NAVY, PP_ALIGN.LEFT),
-                ("오픈소스 무료 배포 + 스키마 비의존(Schema-Agnostic) .hwpx 슬롯 분석 확장 및 사후 변경영향 거버넌스 패키지화", False, BODY, PP_ALIGN.LEFT),
+                ("오픈소스 무료 배포 + 실무자용 간편 콘솔(/easy.html) · 5대 최종 점검표 · 사내 보안 AI 표준 프롬프트 키트 통합 제공", False, BODY, PP_ALIGN.LEFT),
             ],
         ],
         font_pt=8.5,
